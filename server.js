@@ -238,9 +238,32 @@ const server = http.createServer(async (req, res) => {
       if (result.status === 200) {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(result.data);
+      } else if (result.status === 404) {
+        console.log('data.json non trouvé sur GitHub, création en cours...');
+        const localDataPath = path.join(__dirname, DATA_FILE);
+        let defaultContent;
+        if (fs.existsSync(localDataPath)) {
+          defaultContent = fs.readFileSync(localDataPath, 'utf-8');
+        } else {
+          defaultContent = JSON.stringify({
+            version: 1,
+            exportedAt: new Date().toISOString(),
+            stands: [],
+            classes: [],
+            inscriptions: []
+          }, null, 2);
+        }
+        const createResult = await saveToGithub(config.token, config.owner, config.repo, config.branch, defaultContent, DATA_FILE);
+        if (createResult.status === 201) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(defaultContent);
+        } else {
+          res.writeHead(createResult.status, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Impossible de créer le fichier: ' + (createResult.data.message || createResult.status) }));
+        }
       } else {
         res.writeHead(result.status, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Fichier non trouvé sur GitHub' }));
+        res.end(JSON.stringify({ error: 'Erreur GitHub: ' + result.status }));
       }
     } catch (e) {
       res.writeHead(500, { 'Content-Type': 'application/json' });

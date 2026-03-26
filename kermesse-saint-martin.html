@@ -412,6 +412,7 @@
 // ── CONSTANTES ────────────────────────────────────────────────
 const CLASSES_ORDER = ['TPS/PS','MS','GS','CP','CE1','CE2','CM1','CM2'];
 const ADMIN_PASSWORD = 'admin2026';
+const API_BASE = 'http://localhost:3000';
 
 // ── ÉTAT ────────────────────────────────────────────────────
 let state = { classes:[], inscriptions:[], stands:[] };
@@ -437,7 +438,7 @@ function genId() { return Date.now().toString(36) + Math.random().toString(36).s
 // ── PERSISTANCE API ──────────────────────────────────────────
 async function saveData() {
   try {
-    await fetch('/api/save', {
+    await fetch(API_BASE + '/api/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -453,7 +454,7 @@ async function saveData() {
 
 async function loadData() {
   try {
-    const response = await fetch('/api/data');
+    const response = await fetch(API_BASE + '/api/data');
     if (!response.ok) throw new Error('HTTP ' + response.status);
     const data = await response.json();
     state.stands = data.stands || [];
