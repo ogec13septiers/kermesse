@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "exportedAt": "2026-01-01T00:00:00.000Z",
+  "stands": [
+    { "id": "jouets",    "name": "Vente de jouets",      "emoji": "🧸", "cap": 2, "slots": ["11h30/12h30","Fin spectacle/17h00","17h00/18h00"] },
+    { "id": "peche",     "name": "Pêche à la ligne",      "emoji": "🎣", "cap": 2, "slots": ["11h30/12h30","Fin spectacle/17h00","17h00/18h00"] },
+    { "id": "gonflable", "name": "Structure gonflable",   "emoji": "🎈", "cap": 6, "slots": ["11h30/12h30","Fin spectacle/17h00","17h00/18h00"] },
+    { "id": "tiraubut",  "name": "Tir au but",            "emoji": "⚽", "cap": 2, "slots": ["11h30/12h30","Fin spectacle/17h00","17h00/18h00"] },
+    { "id": "grenouille","name": "Jeux de la grenouille", "emoji": "🐸", "cap": 2, "slots": ["11h30/12h30","Fin spectacle/17h00","17h00/18h00"] },
+    { "id": "fakir",     "name": "Fakir",                 "emoji": "🔮", "cap": 2, "slots": ["11h30/12h30","Fin spectacle/17h00","17h00/18h00"] },
+    { "id": "plumes",    "name": "Plumes / Tatouages",    "emoji": "🦋", "cap": 4, "slots": ["11h30/12h30","Fin spectacle/17h00"] },
+    { "id": "crepes",    "name": "Crêpes",                "emoji": "🥞", "cap": 4, "slots": ["Fin spectacle/17h00","17h00/18h00"] },
+    { "id": "confiserie","name": "Confiserie",            "emoji": "🍬", "cap": 2, "slots": ["11h30/12h30","12h30/13h30","13h30/14h30","Fin spectacle/17h00","17h00/18h00"] },
+    { "id": "jeuxbois",  "name": "Jeux en bois",          "emoji": "🪀", "cap": 2, "slots": ["11h30/12h30","Fin spectacle/17h00","17h00/18h00"] },
+    { "id": "bar",       "name": "Bar",                   "emoji": "🍹", "cap": 5, "slots": ["11h30/12h30","12h30/13h30","13h30/14h30","Fin spectacle/17h00","17h00/18h00"] }
+  ],
+  "classes": [
+    { "id": "tps", "name": "TPS/PS",  "children": [] },
+    { "id": "ms",  "name": "MS",      "children": [] },
+    { "id": "gs",  "name": "GS",      "children": [] },
+    { "id": "cp",  "name": "CP",      "children": [] },
+    { "id": "ce1", "name": "CE1",     "children": [] },
+    { "id": "ce2", "name": "CE2",     "children": [] },
+    { "id": "cm1", "name": "CM1",     "children": [] },
+    { "id": "cm2", "name": "CM2",     "children": [] }
+  ],
+  "inscriptions": []
+}
