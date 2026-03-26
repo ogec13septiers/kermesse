@@ -80,5 +80,5 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`Serveur démarré : http://localhost:${PORT}`);
+  console.log(`Serveur démarré : https://ogec13septiers.github.io/kermesse:${PORT}`);
 });
