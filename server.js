@@ -167,12 +167,6 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (!config) {
-    res.writeHead(401, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: 'Non configuré. Ouvrez http://localhost:' + PORT }));
-    return;
-  }
-
   if (req.method === 'POST' && req.url === '/api/config') {
     let body = '';
     req.on('data', chunk => body += chunk);
@@ -183,11 +177,39 @@ const server = http.createServer(async (req, res) => {
       const branch = params.get('branch') || 'main';
       const token = params.get('token');
 
+      console.log('Config attempt:', { owner, repo, branch, tokenLength: token ? token.length : 0 });
+
+      if (!token || token.length < 10) {
+        res.writeHead(400, { 'Content-Type': 'text/html' });
+        res.end('<p class="error">Token manquant ou trop court.</p><a href="/">Réessayer</a>');
+        return;
+      }
+
       try {
         const result = await githubRequest('GET', `https://api.github.com/repos/${owner}/${repo}`, token);
+        console.log('GitHub response:', result.status, result.data);
+        
+        if (result.status === 401) {
+          res.writeHead(400, { 'Content-Type': 'text/html' });
+          res.end('<p class="error">Token invalide. Vérifiez qu\'il n\'est pas expiré et qu\'il a les permissions "repo".</p><a href="/">Réessayer</a>');
+          return;
+        }
+        
+        if (result.status === 404) {
+          res.writeHead(400, { 'Content-Type': 'text/html' });
+          res.end('<p class="error">Dépôt introuvable. Vérifiez le nom du repo.</p><a href="/">Réessayer</a>');
+          return;
+        }
+        
+        if (result.status === 403) {
+          res.writeHead(400, { 'Content-Type': 'text/html' });
+          res.end('<p class="error">Accès refusé. Vérifiez que le token a les permissions "repo".</p><a href="/">Réessayer</a>');
+          return;
+        }
+
         if (result.status !== 200) {
           res.writeHead(400, { 'Content-Type': 'text/html' });
-          res.end('<p class="error">Dépôt introuvable ou token invalide.</p><a href="/">Réessayer</a>');
+          res.end('<p class="error">Erreur GitHub: ' + (result.data.message || result.status) + '</p><a href="/">Réessayer</a>');
           return;
         }
 
@@ -199,6 +221,12 @@ const server = http.createServer(async (req, res) => {
         res.end('<p class="error">Erreur: ' + e.message + '</p><a href="/">Réessayer</a>');
       }
     });
+    return;
+  }
+
+  if (!config) {
+    res.writeHead(401, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Non configuré. Ouvrez http://localhost:' + PORT }));
     return;
   }
 
