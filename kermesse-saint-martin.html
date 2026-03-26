@@ -408,13 +408,23 @@
 </main>
 <div id="toast"></div>
 
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script>
-// ── CONSTANTES ────────────────────────────────────────────────
+const firebaseConfig = {
+  apiKey: "AIzaSyCj0xAlVsmx3f0S2juVRP4rma0hqfYoJOg",
+  authDomain: "kermesse-ogec-2026.firebaseapp.com",
+  projectId: "kermesse-ogec-2026",
+  storageBucket: "kermesse-ogec-2026.firebasestorage.app",
+  messagingSenderId: "96483794474",
+  appId: "1:96483794474:web:805b0ba4ea801120fb2d53"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
 const CLASSES_ORDER = ['TPS/PS','MS','GS','CP','CE1','CE2','CM1','CM2'];
 const ADMIN_PASSWORD = 'admin2026';
-const API_BASE = 'http://localhost:3000';
 
-// ── ÉTAT ────────────────────────────────────────────────────
 let state = { classes:[], inscriptions:[], stands:[] };
 let selectedSlot = null;
 let isAdmin = false;
@@ -435,33 +445,28 @@ function slotNames(sId, slot){ return state.inscriptions.filter(i => i.standId==
 
 function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
 
-// ── PERSISTANCE API ──────────────────────────────────────────
+// ── PERSISTANCE FIREBASE ────────────────────────────────────
 async function saveData() {
   try {
-    await fetch(API_BASE + '/api/save', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        stands: state.stands,
-        classes: state.classes,
-        inscriptions: state.inscriptions
-      })
+    await db.ref('/').set({
+      stands: state.stands,
+      classes: state.classes,
+      inscriptions: state.inscriptions
     });
   } catch(err) {
-    console.warn('Erreur save API:', err.message);
+    console.warn('Erreur save Firebase:', err.message);
   }
 }
 
 async function loadData() {
   try {
-    const response = await fetch(API_BASE + '/api/data');
-    if (!response.ok) throw new Error('HTTP ' + response.status);
-    const data = await response.json();
+    const snapshot = await db.ref('/').once('value');
+    const data = snapshot.val() || {};
     state.stands = data.stands || [];
     state.classes = data.classes || [];
     state.inscriptions = data.inscriptions || [];
   } catch(err) {
-    console.warn('Erreur load API:', err.message);
+    console.warn('Erreur load Firebase:', err.message);
     state.stands = [];
     state.classes = [];
     state.inscriptions = [];
