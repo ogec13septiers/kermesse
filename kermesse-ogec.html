@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Kermesse OGEC — 21 juin 2026</title>
+<title>Kermesse École Saint-Martin — 21 juin 2026</title>
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;500;600;700;800&family=Nunito:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -46,21 +46,17 @@
   #app-loader h2 { font-family:'Baloo 2',sans-serif; font-size:1.5rem; font-weight:800; }
   #app-loader p  { font-size:0.9rem; opacity:0.85; }
 
-  /* SYNC BADGE */
-  #sync-badge {
+  /* ADMIN BADGE */
+  #admin-badge {
     position: fixed; top: 0.8rem; right: 1rem;
     display: flex; align-items: center; gap: 0.45rem;
     background: white; border-radius: 20px; padding: 0.3rem 0.8rem;
     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     font-size: 0.75rem; font-weight: 700; z-index: 500;
-    border: 2px solid #e5e7eb; transition: all 0.3s;
+    border: 2px solid #e5e7eb; cursor: pointer; transition: all 0.2s;
   }
-  #sync-badge.ok   { border-color:#6ee7b7; color:#047857; }
-  #sync-badge.busy { border-color:#fcd34d; color:#92400e; }
-  #sync-badge.err  { border-color:#fca5a5; color:#991b1b; }
-  .sync-dot { width:8px; height:8px; border-radius:50%; background:currentColor; }
-  #sync-badge.busy .sync-dot { animation: blink 1s infinite; }
-  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+  #admin-badge.active { border-color: var(--accent); color: #92400e; background: #fef3c7; }
+  #admin-badge:hover { transform: translateY(-1px); }
 
   /* HEADER */
   header {
@@ -75,11 +71,6 @@
   .header-title { flex: 1; }
   .header-title h1 { font-family:'Baloo 2',sans-serif; font-size:1.8rem; font-weight:800; letter-spacing:-0.5px; }
   .header-title p  { font-size:0.9rem; opacity:0.9; }
-  .fb-pill {
-    background: rgba(255,255,255,0.15); border:1px solid rgba(255,255,255,0.3);
-    border-radius: 20px; padding: 0.3rem 0.9rem;
-    font-size: 0.75rem; font-weight: 700;
-  }
   nav { background: rgba(255,255,255,0.15); backdrop-filter: blur(10px); border-top: 1px solid rgba(255,255,255,0.2); }
   .nav-inner { max-width:1400px; margin:0 auto; display:flex; padding:0 2rem; overflow-x:auto; }
   .nav-btn {
@@ -91,6 +82,8 @@
   }
   .nav-btn:hover { color:white; background:rgba(255,255,255,0.1); }
   .nav-btn.active { color:white; border-bottom-color:var(--accent); }
+  .nav-btn.admin-only { display:none; }
+  .nav-btn.admin-only.visible { display:flex; }
 
   /* LAYOUT */
   main { max-width:1400px; margin:0 auto; padding:2rem; }
@@ -98,8 +91,15 @@
   .page.active { display:block; }
   .card { background:var(--card); border-radius:16px; padding:1.5rem; box-shadow:0 2px 12px rgba(124,58,237,0.08); border:1px solid var(--border); }
   .card-title { font-family:'Baloo 2',sans-serif; font-size:1.2rem; font-weight:700; margin-bottom:1rem; display:flex; align-items:center; gap:0.5rem; }
-  .page-header { display:flex; align-items:center; gap:1rem; margin-bottom:1.5rem; }
+  .page-header { display:flex; align-items:center; gap:1rem; margin-bottom:1.5rem; flex-wrap:wrap; }
   .page-header h2 { font-family:'Baloo 2',sans-serif; font-size:1.6rem; font-weight:800; color:var(--primary); }
+  .admin-banner {
+    background: linear-gradient(135deg, #fef3c7, #fffbeb);
+    border: 2px solid var(--accent); border-radius: 12px;
+    padding: 0.7rem 1.2rem; margin-bottom: 1.5rem;
+    display: flex; align-items: center; gap: 0.6rem;
+    font-weight: 700; color: #92400e; font-size: 0.9rem;
+  }
 
   /* PLANNING */
   .planning-grid { display:grid; gap:1.2rem; }
@@ -148,6 +148,9 @@
   .btn-danger:hover { background:#c53030; }
   .btn-sm { padding:0.4rem 0.9rem; font-size:0.82rem; }
   .btn-success { background:var(--accent2); color:white; }
+  .btn-secondary { background:#e9d5ff; color:var(--secondary); }
+  .btn-secondary:hover { background:#d8b4fe; }
+  .btn-warning { background:var(--accent); color:white; }
 
   .children-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:0.5rem; max-height:220px; overflow-y:auto; padding:0.5rem; border:2px solid var(--border); border-radius:10px; background:white; }
   .child-check { display:flex; align-items:center; gap:0.5rem; padding:0.4rem 0.6rem; border-radius:8px; cursor:pointer; transition:background 0.15s; font-size:0.88rem; }
@@ -194,12 +197,50 @@
   .all-good .big { font-size:3rem; margin-bottom:0.5rem; }
   .all-good p { font-size:1.1rem; font-weight:600; }
 
+  /* PARAMÈTRES / ADMIN */
+  .settings-section { margin-bottom:2rem; }
+  .settings-section-title { font-family:'Baloo 2',sans-serif; font-size:1.1rem; font-weight:700; color:var(--secondary); margin-bottom:1rem; padding-bottom:0.5rem; border-bottom:2px solid var(--border); display:flex; align-items:center; gap:0.5rem; }
+  .stands-admin-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:1.2rem; }
+  .stand-admin-card { background:white; border-radius:14px; border:2px solid var(--border); overflow:hidden; box-shadow:0 2px 8px rgba(124,58,237,0.06); }
+  .stand-admin-header { background:linear-gradient(135deg,var(--secondary),var(--primary)); color:white; padding:0.8rem 1rem; display:flex; align-items:center; gap:0.6rem; }
+  .stand-admin-header input { background:rgba(255,255,255,0.2); border:1px solid rgba(255,255,255,0.4); border-radius:8px; color:white; padding:0.3rem 0.6rem; font-family:'Baloo 2',sans-serif; font-weight:700; font-size:1rem; flex:1; }
+  .stand-admin-header input::placeholder { color:rgba(255,255,255,0.6); }
+  .stand-admin-header input:focus { outline:none; background:rgba(255,255,255,0.3); }
+  .stand-admin-body { padding:1rem; }
+  .stand-admin-meta { display:flex; gap:0.8rem; margin-bottom:0.8rem; align-items:center; flex-wrap:wrap; }
+  .stand-admin-meta label { font-size:0.82rem; font-weight:700; color:var(--text-light); }
+  .stand-admin-meta input[type=number] { width:70px; border:2px solid var(--border); border-radius:8px; padding:0.3rem 0.5rem; font-family:'Nunito',sans-serif; font-size:0.9rem; }
+  .stand-admin-meta input[type=text] { flex:1; min-width:60px; max-width:90px; border:2px solid var(--border); border-radius:8px; padding:0.3rem 0.5rem; font-size:0.9rem; text-align:center; }
+  .slots-admin-list { display:flex; flex-direction:column; gap:0.4rem; }
+  .slot-admin-row { display:flex; gap:0.5rem; align-items:center; }
+  .slot-admin-row input { flex:1; border:2px solid var(--border); border-radius:8px; padding:0.35rem 0.6rem; font-size:0.85rem; font-family:'Nunito',sans-serif; }
+  .slot-admin-row input:focus { outline:none; border-color:var(--primary); }
+  .slot-admin-row .btn-danger { padding:0.25rem 0.5rem; font-size:0.75rem; border-radius:6px; }
+  .add-slot-btn { margin-top:0.5rem; font-size:0.82rem; padding:0.4rem 0.8rem; }
+  .new-stand-form { background:white; border:2px dashed var(--border); border-radius:14px; padding:1.2rem; margin-bottom:1.5rem; display:flex; gap:0.8rem; flex-wrap:wrap; align-items:flex-end; }
+
+  /* MODAL ADMIN */
+  #admin-modal {
+    display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5);
+    z-index:2000; align-items:center; justify-content:center;
+  }
+  #admin-modal.open { display:flex; }
+  .admin-modal-box {
+    background:white; border-radius:20px; padding:2rem; max-width:380px; width:90%;
+    box-shadow:0 20px 60px rgba(0,0,0,0.3); text-align:center;
+  }
+  .admin-modal-box h3 { font-family:'Baloo 2',sans-serif; font-size:1.4rem; font-weight:800; color:var(--secondary); margin-bottom:0.5rem; }
+  .admin-modal-box p { color:var(--text-light); font-size:0.9rem; margin-bottom:1.2rem; }
+  .admin-modal-box input { border:2px solid var(--border); border-radius:10px; padding:0.7rem 1rem; font-size:1rem; font-family:'Nunito',sans-serif; width:100%; margin-bottom:1rem; letter-spacing:0.2em; }
+  .admin-modal-box input:focus { outline:none; border-color:var(--primary); }
+  .admin-modal-actions { display:flex; gap:0.8rem; justify-content:center; }
+  .export-import-row { display:flex; gap:0.8rem; flex-wrap:wrap; margin-top:1rem; }
+
   @media (max-width:640px) {
     main { padding:1rem; }
     .header-inner { padding:0.8rem 1rem; }
     .nav-inner { padding:0 0.5rem; }
     .nav-btn { font-size:0.8rem; padding:0.7rem 0.8rem; }
-    .fb-pill { display:none; }
   }
 </style>
 </head>
@@ -208,7 +249,25 @@
 <div id="app-loader">
   <div class="loader-spinner"></div>
   <h2>🎪 Kermesse École Saint-Martin</h2>
-  <p>Connexion à Firebase Firestore…</p>
+  <p>Chargement des données…</p>
+</div>
+
+<!-- ADMIN BADGE -->
+<div id="admin-badge" onclick="toggleAdminMode()">🔒 <span id="admin-badge-txt">Mode admin</span></div>
+
+<!-- MODAL MOT DE PASSE ADMIN -->
+<div id="admin-modal">
+  <div class="admin-modal-box">
+    <div style="font-size:2.5rem;margin-bottom:0.5rem">🔐</div>
+    <h3>Accès administrateur</h3>
+    <p>Entrez le code d'accès pour activer le mode administrateur.</p>
+    <input type="password" id="admin-pwd-input" placeholder="••••••" onkeydown="if(event.key==='Enter')checkAdminPwd()" />
+    <div class="admin-modal-actions">
+      <button class="btn btn-secondary" onclick="closeAdminModal()">Annuler</button>
+      <button class="btn btn-primary" onclick="checkAdminPwd()">🔓 Valider</button>
+    </div>
+    <p style="font-size:0.75rem;margin-top:0.8rem;color:#d1d5db">Code par défaut : <strong>admin2026</strong></p>
+  </div>
 </div>
 
 <header>
@@ -223,8 +282,9 @@
     <div class="nav-inner">
       <button class="nav-btn active" onclick="showPage('planning')"    id="nav-planning">📋 Planning</button>
       <button class="nav-btn"        onclick="showPage('inscription')" id="nav-inscription">✍️ Inscription</button>
-      <button class="nav-btn"        onclick="showPage('classes')"     id="nav-classes">👨‍👩‍👧 Gestion des classes</button>
-      <button class="nav-btn"        onclick="showPage('nonassignes')" id="nav-nonassignes">⚠️ Non positionnés</button>
+      <button class="nav-btn admin-only" onclick="showPage('classes')"     id="nav-classes">👨‍👩‍👧 Gestion des classes</button>
+      <button class="nav-btn admin-only" onclick="showPage('nonassignes')" id="nav-nonassignes">⚠️ Non positionnés</button>
+      <button class="nav-btn admin-only" onclick="showPage('parametres')"  id="nav-parametres">⚙️ Paramètres</button>
     </div>
   </nav>
 </header>
@@ -274,45 +334,83 @@
   </div>
 </div>
 
-<!-- CLASSES -->
+<!-- CLASSES (admin) -->
 <div class="page" id="page-classes">
   <div class="page-header"><span style="font-size:1.8rem">👨‍👩‍👧</span><h2>Gestion des classes &amp; enfants</h2></div>
+  <div class="admin-banner">🔑 Mode administrateur — Gestion des classes</div>
   <div class="add-class-form">
     <div class="form-group" style="flex:1;min-width:180px">
       <label>➕ Nouvelle classe</label>
-      <input type="text" id="new-class-name" placeholder="ex: CM2-A" onkeydown="if(event.key==='Enter')addClass()" />
+      <input type="text" id="new-class-name" placeholder="ex: CM2-A" onkeydown="if(event.key==='Enter')addClassFn()" />
     </div>
-    <button class="btn btn-primary" onclick="addClass()">Ajouter la classe</button>
+    <button class="btn btn-primary" onclick="addClassFn()">Ajouter la classe</button>
   </div>
   <div class="classes-grid" id="classes-grid">
     <div style="color:var(--text-light)">Chargement…</div>
   </div>
 </div>
 
-<!-- NON ASSIGNÉS -->
+<!-- NON ASSIGNÉS (admin) -->
 <div class="page" id="page-nonassignes">
   <div class="page-header"><span style="font-size:1.8rem">⚠️</span><h2>Enfants non positionnés</h2></div>
+  <div class="admin-banner">🔑 Mode administrateur — Vue des non positionnés</div>
   <div id="unassigned-container"><div style="color:var(--text-light)">Chargement…</div></div>
+</div>
+
+<!-- PARAMÈTRES (admin) -->
+<div class="page" id="page-parametres">
+  <div class="page-header"><span style="font-size:1.8rem">⚙️</span><h2>Paramètres des stands</h2></div>
+  <div class="admin-banner">🔑 Mode administrateur — Configuration des stands et créneaux</div>
+
+  <!-- Ajouter un nouveau stand -->
+  <div class="settings-section">
+    <div class="settings-section-title">➕ Ajouter un nouveau stand</div>
+    <div class="new-stand-form">
+      <div class="form-group" style="flex:1;min-width:150px">
+        <label>Nom du stand</label>
+        <input type="text" id="new-stand-name" placeholder="ex: Chamboule-tout" />
+      </div>
+      <div class="form-group" style="width:80px">
+        <label>Emoji</label>
+        <input type="text" id="new-stand-emoji" placeholder="🎯" maxlength="2" />
+      </div>
+      <div class="form-group" style="width:120px">
+        <label>Places/créneau</label>
+        <input type="number" id="new-stand-cap" placeholder="2" min="1" max="20" value="2" />
+      </div>
+      <button class="btn btn-primary" onclick="addStand()" style="align-self:flex-end">➕ Ajouter</button>
+    </div>
+  </div>
+
+  <!-- Liste des stands -->
+  <div class="settings-section">
+    <div class="settings-section-title">🏕️ Stands configurés</div>
+    <div class="stands-admin-grid" id="stands-admin-grid"></div>
+  </div>
+
+  <!-- Export / Import -->
+  <div class="settings-section">
+    <div class="settings-section-title">💾 Sauvegarde &amp; restauration</div>
+    <div class="card">
+      <p style="color:var(--text-light);font-size:0.9rem;margin-bottom:1rem">Exportez toutes les données (stands, classes, inscriptions) au format JSON pour les sauvegarder ou les transférer. L'import remplace toutes les données existantes.</p>
+      <div class="export-import-row">
+        <button class="btn btn-secondary" onclick="exportData()">📥 Exporter JSON</button>
+        <label class="btn btn-secondary" style="cursor:pointer">
+          📤 Importer JSON
+          <input type="file" accept=".json" onchange="importData(event)" style="display:none" />
+        </label>
+        <button class="btn btn-danger btn-sm" onclick="resetAllData()" style="margin-left:auto">🗑 Réinitialiser toutes les données</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 </main>
 <div id="toast"></div>
 
-<script type="module">
-import { initializeApp }  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import {
-  getFirestore, collection, doc,
-  onSnapshot, updateDoc, deleteDoc, addDoc,
-  arrayUnion, arrayRemove, getDocs, writeBatch
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-
-// ── CONFIG ──────────────────────────────────────────────────
-
-const fbApp = initializeApp(firebaseConfig);
-const db    = getFirestore(fbApp);
-
-// ── DONNÉES STATIQUES ────────────────────────────────────────
-const STANDS = [
+<script>
+// ── CONSTANTES PAR DÉFAUT ────────────────────────────────────
+const STANDS_DEFAUT = [
   { id:'jouets',    name:'Vente de jouets',      emoji:'🧸', cap:2, slots:['11h30/12h30','Fin spectacle/17h00','17h00/18h00'] },
   { id:'peche',     name:'Pêche à la ligne',      emoji:'🎣', cap:2, slots:['11h30/12h30','Fin spectacle/17h00','17h00/18h00'] },
   { id:'gonflable', name:'Structure gonflable',   emoji:'🎈', cap:6, slots:['11h30/12h30','Fin spectacle/17h00','17h00/18h00'] },
@@ -332,58 +430,169 @@ const CLASSES_DEFAUT = [
   {id:'cm1',name:'CM1'},{id:'cm2',name:'CM2'},
 ];
 const CLASSES_ORDER = ['TPS/PS','MS','GS','CP','CE1','CE2','CM1','CM2'];
+const ADMIN_PASSWORD = 'admin2026';
 
-// ── ÉTAT LOCAL ───────────────────────────────────────────────
-let state = { classes:[], inscriptions:[] };
+// ── ÉTAT ────────────────────────────────────────────────────
+let state = { classes:[], inscriptions:[], stands:[] };
 let selectedSlot = null;
+let isAdmin = false;
 
 // ── UTILITAIRES ─────────────────────────────────────────────
 const $ = id => document.getElementById(id);
+
 function toast(msg, type='success') {
   const t = $('toast');
   t.textContent = msg; t.className = 'show ' + type;
   setTimeout(() => t.className = '', 3200);
 }
-function sync(s) {
-  const el = $('sync-badge'), txt = $('sync-txt');
-  el.className = s === 'busy' ? 'busy' : s === 'err' ? 'err' : 'ok';
-  txt.textContent = s === 'busy' ? 'Synchronisation…' : s === 'err' ? 'Erreur Firebase' : 'Connecté';
-}
+
 function getClass(id) { return state.classes.find(c => c.id === id); }
 function slotUsed(sId, slot) { return state.inscriptions.filter(i => i.standId===sId && i.slotTime===slot).length; }
 function slotLeft(s, slot)   { return s.cap - slotUsed(s.id, slot); }
 function slotNames(sId, slot){ return state.inscriptions.filter(i => i.standId===sId && i.slotTime===slot).map(i=>i.childName); }
 
-// ── INIT FIREBASE ────────────────────────────────────────────
-async function init() {
-  try {
-    // Seed classes si vide
-    const snap = await getDocs(collection(db,'classes'));
-    if (snap.empty) {
-      const b = writeBatch(db);
-      CLASSES_DEFAUT.forEach(c => b.set(doc(db,'classes',c.id), {name:c.name, children:[]}));
-      await b.commit();
-    }
-    // Listener classes
-    onSnapshot(collection(db,'classes'), ss => {
-      state.classes = ss.docs.map(d => ({id:d.id, ...d.data(), children:d.data().children||[]}));
-      state.classes.sort((a,b) => {
-        const ai = CLASSES_ORDER.indexOf(a.name), bi = CLASSES_ORDER.indexOf(b.name);
-        return (ai>=0 && bi>=0) ? ai-bi : a.name.localeCompare(b.name);
-      });
-      sync('ok'); refreshPage();
-    }, () => sync('err'));
-    // Listener inscriptions
-    onSnapshot(collection(db,'inscriptions'), ss => {
-      state.inscriptions = ss.docs.map(d => ({id:d.id, ...d.data()}));
-      sync('ok'); refreshPage();
-    }, () => sync('err'));
+function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
 
-    $('app-loader').classList.add('hidden');
-  } catch(e) {
-    $('app-loader').innerHTML = `<div style="font-size:2rem">❌</div><h2>Erreur Firebase</h2><p>${e.message}</p>`;
-    sync('err');
+// ── PERSISTANCE localStorage ─────────────────────────────────
+function saveData() {
+  localStorage.setItem('kermesse_stands', JSON.stringify(state.stands));
+  localStorage.setItem('kermesse_classes', JSON.stringify(state.classes));
+  localStorage.setItem('kermesse_inscriptions', JSON.stringify(state.inscriptions));
+}
+
+function loadData() {
+  const stands = localStorage.getItem('kermesse_stands');
+  const classes = localStorage.getItem('kermesse_classes');
+  const inscriptions = localStorage.getItem('kermesse_inscriptions');
+
+  state.stands = stands ? JSON.parse(stands) : JSON.parse(JSON.stringify(STANDS_DEFAUT));
+  state.classes = classes ? JSON.parse(classes) : CLASSES_DEFAUT.map(c=>({...c, children:[]}));
+  state.inscriptions = inscriptions ? JSON.parse(inscriptions) : [];
+
+  // Tri classes
+  state.classes.sort((a,b) => {
+    const ai = CLASSES_ORDER.indexOf(a.name), bi = CLASSES_ORDER.indexOf(b.name);
+    return (ai>=0 && bi>=0) ? ai-bi : a.name.localeCompare(b.name);
+  });
+}
+
+// ── EXPORT / IMPORT ──────────────────────────────────────────
+function exportData() {
+  const data = {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    stands: state.stands,
+    classes: state.classes,
+    inscriptions: state.inscriptions
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `kermesse-saint-martin-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  toast('Export téléchargé ✅');
+}
+
+function importData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data.stands || !data.classes) throw new Error('Format invalide');
+      if (!confirm('Importer ces données ? Toutes les données actuelles seront remplacées.')) return;
+      state.stands = data.stands || state.stands;
+      state.classes = data.classes || state.classes;
+      state.inscriptions = data.inscriptions || [];
+      saveData();
+      refreshPage();
+      toast('Import réussi ✅');
+    } catch(err) { toast('Erreur lors de l\'import : '+err.message, 'error'); }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+function resetAllData() {
+  if (!confirm('⚠️ Réinitialiser TOUTES les données ? Cette action est irréversible.')) return;
+  localStorage.removeItem('kermesse_stands');
+  localStorage.removeItem('kermesse_classes');
+  localStorage.removeItem('kermesse_inscriptions');
+  loadData();
+  saveData();
+  refreshPage();
+  toast('Données réinitialisées');
+}
+
+// ── ADMIN MODE ───────────────────────────────────────────────
+function toggleAdminMode() {
+  if (isAdmin) {
+    isAdmin = false;
+    applyAdminUI();
+    toast('Mode admin désactivé');
+  } else {
+    openAdminModal();
   }
+}
+
+function openAdminModal() {
+  $('admin-modal').classList.add('open');
+  $('admin-pwd-input').value = '';
+  setTimeout(() => $('admin-pwd-input').focus(), 100);
+}
+
+function closeAdminModal() {
+  $('admin-modal').classList.remove('open');
+}
+
+function checkAdminPwd() {
+  const pwd = $('admin-pwd-input').value;
+  if (pwd === ADMIN_PASSWORD) {
+    isAdmin = true;
+    closeAdminModal();
+    applyAdminUI();
+    toast('✅ Mode administrateur activé');
+  } else {
+    $('admin-pwd-input').value = '';
+    $('admin-pwd-input').style.borderColor = 'var(--danger)';
+    setTimeout(() => $('admin-pwd-input').style.borderColor = '', 1500);
+    toast('❌ Code incorrect', 'error');
+  }
+}
+
+function applyAdminUI() {
+  const badge = $('admin-badge');
+  const txt = $('admin-badge-txt');
+  const adminBtns = document.querySelectorAll('.nav-btn.admin-only');
+
+  if (isAdmin) {
+    badge.classList.add('active');
+    txt.textContent = '🔑 Admin actif';
+    adminBtns.forEach(b => b.classList.add('visible'));
+  } else {
+    badge.classList.remove('active');
+    txt.textContent = 'Mode admin';
+    adminBtns.forEach(b => b.classList.remove('visible'));
+    // Redirect to planning if on admin-only page
+    const cur = document.querySelector('.page.active');
+    if (cur && ['page-classes','page-nonassignes','page-parametres'].includes(cur.id)) {
+      showPage('planning');
+    }
+  }
+}
+
+// Close modal on backdrop click
+$('admin-modal').addEventListener('click', e => { if(e.target === $('admin-modal')) closeAdminModal(); });
+
+// ── INIT ────────────────────────────────────────────────────
+function init() {
+  loadData();
+  saveData();
+  setTimeout(() => {
+    $('app-loader').classList.add('hidden');
+    renderPlanning();
+  }, 600);
 }
 
 function refreshPage() {
@@ -392,10 +601,17 @@ function refreshPage() {
   if (cur==='page-inscription') { renderInscriptionSelects(); renderRecentInscriptions(); }
   if (cur==='page-classes')     renderClasses();
   if (cur==='page-nonassignes') renderNonAssignes();
+  if (cur==='page-parametres')  renderParametres();
 }
 
 // ── NAVIGATION ───────────────────────────────────────────────
 window.showPage = id => {
+  // Vérif admin
+  const adminPages = ['classes','nonassignes','parametres'];
+  if (adminPages.includes(id) && !isAdmin) {
+    openAdminModal();
+    return;
+  }
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   $('page-'+id).classList.add('active');
@@ -404,23 +620,24 @@ window.showPage = id => {
   if (id==='inscription') { renderInscriptionSelects(); renderRecentInscriptions(); }
   if (id==='classes')     renderClasses();
   if (id==='nonassignes') renderNonAssignes();
+  if (id==='parametres')  renderParametres();
 };
 
 // ── PLANNING ─────────────────────────────────────────────────
 function renderPlanning() {
-  const totalCap  = STANDS.reduce((s,st) => s + st.slots.length * st.cap, 0);
+  const totalCap  = state.stands.reduce((s,st) => s + st.slots.length * st.cap, 0);
   const occupied  = state.inscriptions.length;
   const pct       = totalCap ? Math.round(occupied/totalCap*100) : 0;
   const totalKids = state.classes.reduce((s,c) => s+(c.children||[]).length, 0);
   const assigned  = new Set(state.inscriptions.map(i=>i.classId+'|'+i.childName)).size;
 
   $('stats-row').innerHTML = `
-    <div class="stat-card"><span class="stat-icon">🏕️</span><div><div class="stat-num">${STANDS.length}</div><div class="stat-label">Stands</div></div></div>
+    <div class="stat-card"><span class="stat-icon">🏕️</span><div><div class="stat-num">${state.stands.length}</div><div class="stat-label">Stands</div></div></div>
     <div class="stat-card"><span class="stat-icon">🪑</span><div><div class="stat-num">${occupied}/${totalCap}</div><div class="stat-label">Créneaux occupés (${pct}%)</div></div></div>
     <div class="stat-card"><span class="stat-icon">👨‍👩‍👧</span><div><div class="stat-num">${assigned}/${totalKids}</div><div class="stat-label">Enfants positionnés</div></div></div>
     <div class="stat-card"><span class="stat-icon">⚠️</span><div><div class="stat-num">${totalKids-assigned}</div><div class="stat-label">Sans créneau</div></div></div>`;
 
-  $('planning-grid').innerHTML = STANDS.map(st => `
+  $('planning-grid').innerHTML = state.stands.map(st => `
     <div class="stand-card">
       <div class="stand-header">
         <span class="stand-emoji">${st.emoji}</span>
@@ -453,7 +670,7 @@ function renderInscriptionSelects() {
 
   const ss = $('sel-stand'), prevS = ss.value;
   ss.innerHTML = '<option value="">— Choisir un stand —</option>';
-  STANDS.forEach(s => {
+  state.stands.forEach(s => {
     const ok = s.slots.some(sl=>slotLeft(s,sl)>0);
     ss.innerHTML += `<option value="${s.id}" ${s.id===prevS?'selected':''}>${s.emoji} ${s.name}${ok?'':' (complet)'}</option>`;
   });
@@ -474,7 +691,7 @@ window.onClasseChange = () => {
 window.onStandChange = () => {
   const sid = $('sel-stand').value;
   if (!sid) { $('step-creneau').style.display='none'; return; }
-  const s = STANDS.find(x=>x.id===sid);
+  const s = state.stands.find(x=>x.id===sid);
   selectedSlot = null;
   $('slots-container').innerHTML = s.slots.map(sl => {
     const left = slotLeft(s,sl);
@@ -495,7 +712,7 @@ window.selectSlot = (el, sl) => {
   $('step-submit').style.display='block';
 };
 
-window.submitInscription = async () => {
+window.submitInscription = () => {
   const cid  = $('sel-classe').value;
   const sid  = $('sel-stand').value;
   const kids = [...document.querySelectorAll('input[name="enfant"]:checked')].map(x=>x.value);
@@ -503,24 +720,23 @@ window.submitInscription = async () => {
   if (!kids.length) return toast('Sélectionnez au moins un enfant','error');
   if (!sid)  return toast('Choisissez un stand','error');
   if (!selectedSlot) return toast('Choisissez un créneau','error');
-  const s = STANDS.find(x=>x.id===sid);
+  const s = state.stands.find(x=>x.id===sid);
   const left = slotLeft(s, selectedSlot);
   if (kids.length > left) return toast(`Seulement ${left} place(s) disponible(s)`,'error');
 
-  const btn = $('btn-valider'); btn.disabled = true;
-  sync('busy');
-  try {
-    const b = writeBatch(db);
-    kids.forEach(childName => {
-      b.set(doc(collection(db,'inscriptions')), {childName, classId:cid, standId:sid, slotTime:selectedSlot, createdAt:Date.now()});
+  kids.forEach(childName => {
+    state.inscriptions.push({
+      id: genId(),
+      childName, classId:cid, standId:sid, slotTime:selectedSlot, createdAt:Date.now()
     });
-    await b.commit();
-    toast(`✅ ${kids.length} inscription(s) enregistrée(s) !`);
-    $('sel-classe').value='';
-    ['step-enfant','step-stand','step-creneau','step-submit'].forEach(id=>$(id).style.display='none');
-    selectedSlot = null;
-  } catch(e) { toast('Erreur : '+e.message,'error'); sync('err'); }
-  finally { btn.disabled = false; }
+  });
+  saveData();
+  toast(`✅ ${kids.length} inscription(s) enregistrée(s) !`);
+  $('sel-classe').value='';
+  ['step-enfant','step-stand','step-creneau','step-submit'].forEach(id=>$(id).style.display='none');
+  selectedSlot = null;
+  renderRecentInscriptions();
+  renderInscriptionSelects();
 };
 
 function renderRecentInscriptions() {
@@ -533,7 +749,7 @@ function renderRecentInscriptions() {
   });
   c.innerHTML = Object.values(groups).map(g => {
     const cls  = getClass(g[0].classId);
-    const st   = STANDS.find(x=>x.id===g[0].standId);
+    const st   = state.stands.find(x=>x.id===g[0].standId);
     const tags = g.map(i=>`<span style="display:inline-block;background:#ede9fe;color:var(--secondary);border-radius:6px;padding:0.1rem 0.5rem;font-size:0.8rem;margin:0.1rem">${i.childName}</span>`).join('');
     return `<div style="margin-bottom:0.8rem;padding:0.7rem;background:#f9fafb;border-radius:10px;border:1px solid #e5e7eb">
       <div style="font-weight:700;color:var(--secondary)">${st?.emoji} ${st?.name}</div>
@@ -546,16 +762,13 @@ function renderRecentInscriptions() {
   }).join('');
 }
 
-window.deleteGroup = async (classId, standId, slotTime) => {
+window.deleteGroup = (classId, standId, slotTime) => {
   if (!confirm('Supprimer ces inscriptions ?')) return;
-  sync('busy');
-  try {
-    const b = writeBatch(db);
-    state.inscriptions.filter(i=>i.classId===classId&&i.standId===standId&&i.slotTime===slotTime)
-      .forEach(i=>b.delete(doc(db,'inscriptions',i.id)));
-    await b.commit();
-    toast('Inscriptions supprimées');
-  } catch(e) { toast('Erreur : '+e.message,'error'); sync('err'); }
+  state.inscriptions = state.inscriptions.filter(i=>!(i.classId===classId&&i.standId===standId&&i.slotTime===slotTime));
+  saveData();
+  renderRecentInscriptions();
+  renderInscriptionSelects();
+  toast('Inscriptions supprimées');
 };
 
 // ── GESTION CLASSES ──────────────────────────────────────────
@@ -566,7 +779,10 @@ function renderClasses() {
     <div class="class-card">
       <div class="class-header">
         <span>📚 ${cls.name}</span>
-        <span style="background:rgba(255,255,255,0.2);border-radius:20px;padding:0.1rem 0.6rem;font-size:0.85rem">${(cls.children||[]).length} élèves</span>
+        <div style="display:flex;align-items:center;gap:0.5rem">
+          <span style="background:rgba(255,255,255,0.2);border-radius:20px;padding:0.1rem 0.6rem;font-size:0.85rem">${(cls.children||[]).length} élèves</span>
+          <button class="btn btn-danger btn-sm" onclick="removeClassFn('${cls.id}')" title="Supprimer la classe" style="padding:0.2rem 0.5rem">✕</button>
+        </div>
       </div>
       <div class="class-body">
         ${!(cls.children||[]).length
@@ -585,45 +801,48 @@ function renderClasses() {
     </div>`).join('');
 }
 
-window.addChild = async classId => {
+window.addChild = classId => {
   const inp = $('ci-'+classId), name = inp.value.trim();
   if (!name) return;
   const cls = getClass(classId);
   if ((cls.children||[]).includes(name)) return toast('Cet enfant existe déjà','error');
   inp.value = '';
-  sync('busy');
-  try {
-    const sorted = [...(cls.children||[]), name].sort();
-    await updateDoc(doc(db,'classes',classId), {children: sorted});
-    toast('Enfant ajouté ✅');
-  } catch(e) { toast('Erreur : '+e.message,'error'); sync('err'); }
+  const sorted = [...(cls.children||[]), name].sort();
+  cls.children = sorted;
+  saveData();
+  renderClasses();
+  toast('Enfant ajouté ✅');
 };
 
-window.removeChild = async (classId, childName) => {
+window.removeChild = (classId, childName) => {
   if (!confirm(`Supprimer ${childName} ?`)) return;
-  sync('busy');
-  try {
-    await updateDoc(doc(db,'classes',classId), {children: arrayRemove(childName)});
-    const toDelete = state.inscriptions.filter(i=>i.classId===classId&&i.childName===childName);
-    if (toDelete.length) {
-      const b = writeBatch(db);
-      toDelete.forEach(i=>b.delete(doc(db,'inscriptions',i.id)));
-      await b.commit();
-    }
-    toast('Enfant supprimé');
-  } catch(e) { toast('Erreur : '+e.message,'error'); sync('err'); }
+  const cls = getClass(classId);
+  cls.children = (cls.children||[]).filter(c=>c!==childName);
+  state.inscriptions = state.inscriptions.filter(i=>!(i.classId===classId&&i.childName===childName));
+  saveData();
+  renderClasses();
+  toast('Enfant supprimé');
 };
 
-window.addClass = async () => {
+window.addClassFn = () => {
   const inp = $('new-class-name'), name = inp.value.trim();
   if (!name) return;
   if (state.classes.some(c=>c.name.toLowerCase()===name.toLowerCase())) return toast('Cette classe existe déjà','error');
-  sync('busy');
-  try {
-    await addDoc(collection(db,'classes'), {name, children:[]});
-    inp.value = '';
-    toast('Classe ajoutée ✅');
-  } catch(e) { toast('Erreur : '+e.message,'error'); sync('err'); }
+  state.classes.push({id: genId(), name, children:[]});
+  inp.value = '';
+  saveData();
+  renderClasses();
+  toast('Classe ajoutée ✅');
+};
+
+window.removeClassFn = classId => {
+  const cls = getClass(classId);
+  if (!confirm(`Supprimer la classe "${cls?.name}" et toutes ses données ?`)) return;
+  state.classes = state.classes.filter(c=>c.id!==classId);
+  state.inscriptions = state.inscriptions.filter(i=>i.classId!==classId);
+  saveData();
+  renderClasses();
+  toast('Classe supprimée');
 };
 
 // ── NON ASSIGNÉS ─────────────────────────────────────────────
@@ -653,6 +872,99 @@ function renderNonAssignes() {
         </div>`).join('')}
     </div>`;
 }
+
+// ── PARAMÈTRES STANDS ────────────────────────────────────────
+function renderParametres() {
+  const g = $('stands-admin-grid');
+  g.innerHTML = state.stands.map((st, idx) => `
+    <div class="stand-admin-card">
+      <div class="stand-admin-header">
+        <input type="text" value="${st.emoji}" maxlength="2" style="width:50px;text-align:center"
+          onchange="updateStand('${st.id}','emoji',this.value)" />
+        <input type="text" value="${st.name}" placeholder="Nom du stand"
+          onchange="updateStand('${st.id}','name',this.value)" />
+        <button class="btn btn-danger btn-sm" onclick="removeStand('${st.id}')" title="Supprimer ce stand" style="padding:0.2rem 0.5rem;flex-shrink:0">✕</button>
+      </div>
+      <div class="stand-admin-body">
+        <div class="stand-admin-meta">
+          <label>Places par créneau :</label>
+          <input type="number" value="${st.cap}" min="1" max="30"
+            onchange="updateStand('${st.id}','cap',parseInt(this.value)||1)" />
+        </div>
+        <div style="font-size:0.82rem;font-weight:700;color:var(--text-light);margin-bottom:0.5rem">⏰ Créneaux :</div>
+        <div class="slots-admin-list" id="slots-list-${st.id}">
+          ${st.slots.map((sl, sIdx) => `
+            <div class="slot-admin-row">
+              <input type="text" value="${sl}" placeholder="ex: 11h30/12h30"
+                onchange="updateSlot('${st.id}',${sIdx},this.value)" />
+              <button class="btn btn-danger" onclick="removeSlot('${st.id}',${sIdx})">✕</button>
+            </div>`).join('')}
+        </div>
+        <button class="btn btn-secondary add-slot-btn" onclick="addSlot('${st.id}')">+ Ajouter un créneau</button>
+      </div>
+    </div>`).join('');
+}
+
+window.updateStand = (id, field, value) => {
+  const st = state.stands.find(s=>s.id===id);
+  if (!st) return;
+  st[field] = value;
+  saveData();
+  // Ne pas re-render pour ne pas perdre le focus
+};
+
+window.updateSlot = (standId, slotIdx, value) => {
+  const st = state.stands.find(s=>s.id===standId);
+  if (!st) return;
+  st.slots[slotIdx] = value;
+  saveData();
+};
+
+window.addSlot = standId => {
+  const st = state.stands.find(s=>s.id===standId);
+  if (!st) return;
+  st.slots.push('Nouveau créneau');
+  saveData();
+  renderParametres();
+};
+
+window.removeSlot = (standId, slotIdx) => {
+  const st = state.stands.find(s=>s.id===standId);
+  if (!st) return;
+  if (st.slots.length <= 1) return toast('Un stand doit avoir au moins 1 créneau','error');
+  if (!confirm('Supprimer ce créneau ?')) return;
+  // Remove inscriptions for this slot
+  state.inscriptions = state.inscriptions.filter(i=>!(i.standId===standId && i.slotTime===st.slots[slotIdx]));
+  st.slots.splice(slotIdx, 1);
+  saveData();
+  renderParametres();
+  toast('Créneau supprimé');
+};
+
+window.addStand = () => {
+  const name = $('new-stand-name').value.trim();
+  const emoji = $('new-stand-emoji').value.trim() || '🎯';
+  const cap = parseInt($('new-stand-cap').value) || 2;
+  if (!name) return toast('Entrez un nom de stand','error');
+  const id = name.toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,12) + genId().slice(0,4);
+  state.stands.push({ id, name, emoji, cap, slots:['11h30/12h30','Fin spectacle/17h00','17h00/18h00'] });
+  saveData();
+  $('new-stand-name').value = '';
+  $('new-stand-emoji').value = '';
+  $('new-stand-cap').value = '2';
+  renderParametres();
+  toast(`Stand "${name}" ajouté ✅`);
+};
+
+window.removeStand = standId => {
+  const st = state.stands.find(s=>s.id===standId);
+  if (!confirm(`Supprimer le stand "${st?.name}" et toutes ses inscriptions ?`)) return;
+  state.stands = state.stands.filter(s=>s.id!==standId);
+  state.inscriptions = state.inscriptions.filter(i=>i.standId!==standId);
+  saveData();
+  renderParametres();
+  toast('Stand supprimé');
+};
 
 // ── GO ───────────────────────────────────────────────────────
 init();
