@@ -412,7 +412,6 @@
 // ── CONSTANTES ────────────────────────────────────────────────
 const CLASSES_ORDER = ['TPS/PS','MS','GS','CP','CE1','CE2','CM1','CM2'];
 const ADMIN_PASSWORD = 'admin2026';
-const DATA_FILE = 'data.json';
 
 // ── ÉTAT ────────────────────────────────────────────────────
 let state = { classes:[], inscriptions:[], stands:[] };
@@ -435,31 +434,36 @@ function slotNames(sId, slot){ return state.inscriptions.filter(i => i.standId==
 
 function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
 
-// ── PERSISTANCE localStorage + JSON ──────────────────────────
-function saveData() {
-  localStorage.setItem('kermesse_stands', JSON.stringify(state.stands));
-  localStorage.setItem('kermesse_classes', JSON.stringify(state.classes));
-  localStorage.setItem('kermesse_inscriptions', JSON.stringify(state.inscriptions));
+// ── PERSISTANCE API ──────────────────────────────────────────
+async function saveData() {
+  try {
+    await fetch('/api/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        stands: state.stands,
+        classes: state.classes,
+        inscriptions: state.inscriptions
+      })
+    });
+  } catch(err) {
+    console.warn('Erreur save API:', err.message);
+  }
 }
 
 async function loadData() {
-  const inscriptions = localStorage.getItem('kermesse_inscriptions');
-
   try {
-    const response = await fetch(DATA_FILE);
+    const response = await fetch('/api/data');
     if (!response.ok) throw new Error('HTTP ' + response.status);
     const data = await response.json();
-
     state.stands = data.stands || [];
     state.classes = data.classes || [];
-    state.inscriptions = inscriptions ? JSON.parse(inscriptions) : (data.inscriptions || []);
+    state.inscriptions = data.inscriptions || [];
   } catch(err) {
-    console.warn('Impossible de charger ' + DATA_FILE + ':', err.message);
-    const stands = localStorage.getItem('kermesse_stands');
-    const classes = localStorage.getItem('kermesse_classes');
-    state.stands = stands ? JSON.parse(stands) : [];
-    state.classes = classes ? JSON.parse(classes) : [];
-    state.inscriptions = inscriptions ? JSON.parse(inscriptions) : [];
+    console.warn('Erreur load API:', err.message);
+    state.stands = [];
+    state.classes = [];
+    state.inscriptions = [];
   }
 
   state.classes.sort((a,b) => {
@@ -508,12 +512,11 @@ function importData(event) {
 
 function resetAllData() {
   if (!confirm('⚠️ Réinitialiser TOUTES les données ? Cette action est irréversible.')) return;
-  localStorage.removeItem('kermesse_stands');
-  localStorage.removeItem('kermesse_classes');
-  localStorage.removeItem('kermesse_inscriptions');
-  loadData();
+  state.stands = [];
+  state.classes = [];
+  state.inscriptions = [];
   saveData();
-  refreshPage();
+  loadData().then(() => refreshPage());
   toast('Données réinitialisées');
 }
 
@@ -580,7 +583,6 @@ $('admin-modal').addEventListener('click', e => { if(e.target === $('admin-modal
 // ── INIT ────────────────────────────────────────────────────
 async function init() {
   await loadData();
-  saveData();
   $('app-loader').classList.add('hidden');
   renderPlanning();
 }
