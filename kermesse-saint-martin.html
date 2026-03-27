@@ -271,7 +271,7 @@
       <button class="btn btn-secondary" onclick="closeAdminModal()">Annuler</button>
       <button class="btn btn-primary" onclick="checkAdminPwd()">🔓 Valider</button>
     </div>
-    <p style="font-size:0.75rem;margin-top:0.8rem;color:#d1d5db">Code par défaut : <strong>admin2026</strong></p>
+
   </div>
 </div>
 
@@ -469,13 +469,13 @@ async function loadData() {
     state.stands = data.stands || [];
     state.classes = data.classes || [];
     state.inscriptions = data.inscriptions || [];
-    adminPassword = data.adminPassword || 'admin2026';
+    adminPassword = data.adminPassword || null;
   } catch(err) {
     console.warn('Erreur load Firebase:', err.message);
     state.stands = [];
     state.classes = [];
     state.inscriptions = [];
-    adminPassword = 'admin2026';
+    adminPassword = null;
   }
 
   state.classes.sort((a,b) => {
@@ -555,6 +555,10 @@ function closeAdminModal() {
 
 function checkAdminPwd() {
   const pwd = $('admin-pwd-input').value;
+  if (adminPassword === null) {
+    toast('❌ Mot de passe non disponible (Firebase inaccessible)', 'error');
+    return;
+  }
   if (pwd === adminPassword) {
     isAdmin = true;
     closeAdminModal();
