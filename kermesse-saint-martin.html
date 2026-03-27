@@ -587,6 +587,7 @@ function applyAdminUI() {
   const badge = $('admin-badge');
   const txt = $('admin-badge-txt');
   const adminBtns = document.querySelectorAll('.nav-btn.admin-only');
+  const activePage = document.querySelector('.page.active');
 
   if (isAdmin) {
     badge.classList.add('active');
@@ -597,13 +598,12 @@ function applyAdminUI() {
     txt.textContent = 'Mode admin';
     adminBtns.forEach(b => b.classList.remove('visible'));
     // Redirect to planning if on admin-only page
-    const cur = document.querySelector('.page.active');
-    if (cur && ['page-classes','page-nonassignes','page-parametres'].includes(cur.id)) {
+    if (activePage && ['page-classes','page-nonassignes','page-parametres'].includes(activePage.id)) {
       showPage('planning');
     }
+  }
   // Refresh inscription list to show/hide delete buttons
-  const cur = document.querySelector('.page.active');
-  if (cur && cur.id === 'page-inscription') renderRecentInscriptions();
+  if (activePage && activePage.id === 'page-inscription') renderRecentInscriptions();
 }
 
 // Close modal on backdrop click
