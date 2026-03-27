@@ -411,21 +411,10 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script>
-const firebaseConfig = {
-  apiKey: "AIzaSyCj0xAlVsmx3f0S2juVRP4rma0hqfYoJOg",
-  authDomain: "kermesse-ogec-2026.firebaseapp.com",
-  databaseURL: "https://kermesse-ogec-2026-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId: "kermesse-ogec-2026",
-  storageBucket: "kermesse-ogec-2026.firebasestorage.app",
-  messagingSenderId: "96483794474",
-  appId: "1:96483794474:web:805b0ba4ea801120fb2d53"
-};
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
-
 const CLASSES_ORDER = ['TPS/PS','MS','GS','CP','CE1','CE2','CM1','CM2'];
-const ADMIN_PASSWORD = 'admin2026';
 
+let db = null;
+let adminPassword = null;
 let state = { classes:[], inscriptions:[], stands:[] };
 let selectedSlot = null;
 let isAdmin = false;
@@ -445,6 +434,15 @@ function slotLeft(s, slot)   { return s.cap - slotUsed(s.id, slot); }
 function slotNames(sId, slot){ return state.inscriptions.filter(i => i.standId===sId && i.slotTime===slot).map(i=>i.childName); }
 
 function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+
+// ── FIREBASE INIT ────────────────────────────────────────────
+async function initFirebase() {
+  const res = await fetch('firebase-config.json');
+  if (!res.ok) throw new Error('firebase-config.json introuvable');
+  const firebaseConfig = await res.json();
+  firebase.initializeApp(firebaseConfig);
+  db = firebase.database();
+}
 
 // ── PERSISTANCE FIREBASE ────────────────────────────────────
 async function saveData() {
@@ -466,11 +464,13 @@ async function loadData() {
     state.stands = data.stands || [];
     state.classes = data.classes || [];
     state.inscriptions = data.inscriptions || [];
+    adminPassword = data.adminPassword || 'admin2026';
   } catch(err) {
     console.warn('Erreur load Firebase:', err.message);
     state.stands = [];
     state.classes = [];
     state.inscriptions = [];
+    adminPassword = 'admin2026';
   }
 
   state.classes.sort((a,b) => {
@@ -550,7 +550,7 @@ function closeAdminModal() {
 
 function checkAdminPwd() {
   const pwd = $('admin-pwd-input').value;
-  if (pwd === ADMIN_PASSWORD) {
+  if (pwd === adminPassword) {
     isAdmin = true;
     closeAdminModal();
     applyAdminUI();
@@ -589,7 +589,13 @@ $('admin-modal').addEventListener('click', e => { if(e.target === $('admin-modal
 
 // ── INIT ────────────────────────────────────────────────────
 async function init() {
-  await loadData();
+  try {
+    await initFirebase();
+    await loadData();
+  } catch(err) {
+    console.error('Erreur initialisation:', err.message);
+    toast('Erreur de connexion à Firebase', 'error');
+  }
   $('app-loader').classList.add('hidden');
   renderPlanning();
 }
