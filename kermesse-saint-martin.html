@@ -336,6 +336,17 @@
       <div class="card-title">📝 Inscriptions enregistrées</div>
       <div id="recent-inscriptions" style="font-size:0.85rem;color:var(--text-light)">Chargement…</div>
     </div>
+    <div class="card" id="cancel-request-card">
+      <div class="card-title">✉️ Demander l'annulation d'un créneau</div>
+      <p style="font-size:0.85rem;color:var(--text-light);margin-bottom:1rem">Sélectionnez le créneau que vous souhaitez annuler. Un mail de demande sera envoyé aux organisateurs.</p>
+      <div class="form-group">
+        <label>Créneau réservé à annuler</label>
+        <select id="cancel-sel-inscription">
+          <option value="">— Choisir une inscription —</option>
+        </select>
+      </div>
+      <button class="btn btn-secondary" onclick="sendCancelRequest()" style="margin-top:0.5rem">📧 Envoyer la demande d'annulation</button>
+    </div>
   </div>
 </div>
 
@@ -590,7 +601,9 @@ function applyAdminUI() {
     if (cur && ['page-classes','page-nonassignes','page-parametres'].includes(cur.id)) {
       showPage('planning');
     }
-  }
+  // Refresh inscription list to show/hide delete buttons
+  const cur = document.querySelector('.page.active');
+  if (cur && cur.id === 'page-inscription') renderRecentInscriptions();
 }
 
 // Close modal on backdrop click
@@ -755,35 +768,67 @@ window.submitInscription = () => {
 
 function renderRecentInscriptions() {
   const c = $('recent-inscriptions');
-  if (!state.inscriptions.length) { c.innerHTML='<span style="color:var(--text-light)">Aucune inscription.</span>'; return; }
-  const groups = {};
-  [...state.inscriptions].sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).forEach(ins => {
-    const k = `${ins.classId}__${ins.standId}__${ins.slotTime}`;
-    (groups[k] = groups[k]||[]).push(ins);
-  });
-  c.innerHTML = Object.values(groups).map(g => {
-    const cls  = getClass(g[0].classId);
-    const st   = state.stands.find(x=>x.id===g[0].standId);
-    const tags = g.map(i=>`<span style="display:inline-block;background:#ede9fe;color:var(--secondary);border-radius:6px;padding:0.1rem 0.5rem;font-size:0.8rem;margin:0.1rem">${i.childName}</span>`).join('');
-    return `<div style="margin-bottom:0.8rem;padding:0.7rem;background:#f9fafb;border-radius:10px;border:1px solid #e5e7eb">
-      <div style="font-weight:700;color:var(--secondary)">${st?.emoji} ${st?.name}</div>
-      <div style="color:var(--text-light);font-size:0.82rem">⏰ ${g[0].slotTime} · ${cls?.name||''}</div>
-      <div style="margin-top:0.3rem">${tags}</div>
-      <div style="text-align:right;margin-top:0.3rem">
-        <button class="btn btn-danger" onclick="deleteGroup('${g[0].classId}','${g[0].standId}','${g[0].slotTime}')">🗑 Supprimer</button>
+  if (!state.inscriptions.length) { c.innerHTML='<span style="color:var(--text-light)">Aucune inscription.</span>'; renderCancelSelect(); return; }
+  const sorted = [...state.inscriptions].sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+  c.innerHTML = sorted.map(ins => {
+    const cls = getClass(ins.classId);
+    const st  = state.stands.find(x=>x.id===ins.standId);
+    const deleteBtn = isAdmin
+      ? `<button class="btn btn-danger btn-sm" onclick="deleteInscription('${ins.id}')" style="margin-left:0.5rem">🗑</button>`
+      : '';
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:0.55rem 0.7rem;background:#f9fafb;border-radius:8px;border:1px solid #e5e7eb;margin-bottom:0.5rem">
+      <div>
+        <span style="font-weight:700;color:var(--secondary)">${ins.childName}</span>
+        <span style="color:var(--text-light);font-size:0.8rem"> · ${cls?.name||''}</span>
+        <div style="font-size:0.8rem;color:var(--text-light)">${st?.emoji||''} ${st?.name||''} — ⏰ ${ins.slotTime}</div>
       </div>
+      <div>${deleteBtn}</div>
     </div>`;
   }).join('');
+  renderCancelSelect();
 }
 
-window.deleteGroup = (classId, standId, slotTime) => {
-  if (!confirm('Supprimer ces inscriptions ?')) return;
-  state.inscriptions = state.inscriptions.filter(i=>!(i.classId===classId&&i.standId===standId&&i.slotTime===slotTime));
+window.deleteInscription = (id) => {
+  if (!confirm('Supprimer cette inscription ?')) return;
+  state.inscriptions = state.inscriptions.filter(i=>i.id!==id);
   saveData();
   renderRecentInscriptions();
   renderInscriptionSelects();
-  toast('Inscriptions supprimées');
+  toast('Inscription supprimée');
 };
+
+function renderCancelSelect() {
+  const sel = $('cancel-sel-inscription');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">— Choisir une inscription —</option>';
+  [...state.inscriptions].sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).forEach(ins => {
+    const cls = getClass(ins.classId);
+    const st  = state.stands.find(x=>x.id===ins.standId);
+    const opt = document.createElement('option');
+    opt.value = ins.id;
+    opt.textContent = `${ins.childName} (${cls?.name||''}) — ${st?.name||''} ${ins.slotTime}`;
+    sel.appendChild(opt);
+  });
+}
+
+function sendCancelRequest() {
+  const id  = $('cancel-sel-inscription').value;
+  if (!id) return toast('Choisissez une inscription à annuler', 'error');
+  const ins = state.inscriptions.find(i=>i.id===id);
+  if (!ins) return toast('Inscription introuvable', 'error');
+  const cls = getClass(ins.classId);
+  const st  = state.stands.find(x=>x.id===ins.standId);
+  const subject = encodeURIComponent(`Demande d'annulation — Kermesse 2026`);
+  const body = encodeURIComponent(
+    `Bonjour,\n\nJe souhaite annuler l'inscription suivante :\n\n` +
+    `Enfant : ${ins.childName}\n` +
+    `Classe : ${cls?.name||'inconnue'}\n` +
+    `Stand : ${st?.name||'inconnu'}\n` +
+    `Créneau : ${ins.slotTime}\n\n` +
+    `Merci de bien vouloir confirmer l'annulation.\n\nCordialement`
+  );
+  window.location.href = `mailto:ogec13septiers@gmail.com?subject=${subject}&body=${body}`;
+}
 
 // ── GESTION CLASSES ──────────────────────────────────────────
 function renderClasses() {
