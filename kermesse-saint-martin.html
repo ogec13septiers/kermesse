@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Kermesse École Saint-Martin — 21 juin 2026</title>
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;500;600;700;800&family=Nunito:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <style>
   :root {
     --primary: #2EB1D5;
@@ -298,7 +300,11 @@
 
 <!-- PLANNING -->
 <div class="page active" id="page-planning">
-  <div class="page-header"><span style="font-size:1.8rem">📋</span><h2>Planning récapitulatif</h2></div>
+  <div class="page-header">
+    <span style="font-size:1.8rem">📋</span>
+    <h2>Planning récapitulatif</h2>
+    <button id="btn-export-pdf" class="btn btn-secondary admin-only" onclick="exportPdf()" style="margin-left:auto;display:none">📄 Exporter en PDF</button>
+  </div>
   <div class="stats-row"    id="stats-row"></div>
   <div class="planning-grid" id="planning-grid"></div>
 </div>
@@ -593,10 +599,12 @@ function applyAdminUI() {
     badge.classList.add('active');
     txt.textContent = '🔑 Admin actif';
     adminBtns.forEach(b => b.classList.add('visible'));
+    $('btn-export-pdf').style.display = 'inline-flex';
   } else {
     badge.classList.remove('active');
     txt.textContent = 'Mode admin';
     adminBtns.forEach(b => b.classList.remove('visible'));
+    $('btn-export-pdf').style.display = 'none';
     // Redirect to planning if on admin-only page
     if (activePage && ['page-classes','page-nonassignes','page-parametres'].includes(activePage.id)) {
       showPage('planning');
@@ -686,6 +694,147 @@ function renderPlanning() {
         }).join('')}
       </div>
     </div>`).join('');
+}
+
+// ── EXPORT PDF ───────────────────────────────────────────────
+function exportPdf() {
+  const { jsPDF } = window.jspdf;
+  if (!jsPDF) { toast('Librairie PDF non chargée', 'error'); return; }
+
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const W = doc.internal.pageSize.getWidth();
+  const primaryColor  = [46, 177, 213];   // #2EB1D5
+  const secondaryColor = [106, 78, 155];  // #6A4E9B
+  const lightGray     = [245, 245, 250];
+  const borderColor   = [212, 204, 232];
+
+  // ── Page de garde ─────────────────────────────────────────
+  doc.setFillColor(...primaryColor);
+  doc.rect(0, 0, W, 38, 'F');
+  doc.setFillColor(...secondaryColor);
+  doc.rect(0, 38, W, 4, 'F');
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(22);
+  doc.text('Kermesse École Saint-Martin', W / 2, 16, { align: 'center' });
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Planning des stands — Dimanche 21 juin 2026', W / 2, 26, { align: 'center' });
+  doc.setFontSize(9);
+  doc.text(`Généré le ${new Date().toLocaleDateString('fr-FR', {day:'2-digit',month:'long',year:'numeric'})}`, W / 2, 33, { align: 'center' });
+
+  // Stats globales
+  const totalCap = state.stands.reduce((s, st) => s + st.slots.length * st.cap, 0);
+  const occupied = state.inscriptions.length;
+  const totalKids = state.classes.reduce((s, c) => s + (c.children || []).length, 0);
+  const assigned = new Set(state.inscriptions.map(i => i.classId + '|' + i.childName)).size;
+
+  doc.setTextColor(...secondaryColor);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  const stats = [
+    [`${state.stands.length} stands`, `${occupied}/${totalCap} créneaux occupés`, `${assigned}/${totalKids} enfants positionnés`, `${totalKids - assigned} sans créneau`]
+  ];
+  doc.autoTable({
+    startY: 48,
+    head: [],
+    body: stats,
+    theme: 'grid',
+    styles: { fontSize: 10, halign: 'center', fontStyle: 'bold', textColor: secondaryColor, fillColor: lightGray },
+    columnStyles: { 0: { cellWidth: 'auto' }, 1: { cellWidth: 'auto' }, 2: { cellWidth: 'auto' }, 3: { cellWidth: 'auto' } },
+    margin: { left: 10, right: 10 },
+    tableWidth: 'auto',
+  });
+
+  // ── Un tableau par stand ──────────────────────────────────
+  state.stands.forEach((st, idx) => {
+    doc.addPage();
+
+    // En-tête du stand
+    doc.setFillColor(...primaryColor);
+    doc.rect(0, 0, W, 18, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.text(`${st.name}`, 14, 12);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Capacité : ${st.cap} par créneau  •  ${st.slots.length} créneau(x)`, W - 14, 12, { align: 'right' });
+
+    // Barre secondaire
+    doc.setFillColor(...secondaryColor);
+    doc.rect(0, 18, W, 3, 'F');
+
+    // Tableau : une colonne par créneau
+    // Construire les données : trouver le max d'inscrits sur un créneau pour avoir assez de lignes
+    const colsData = st.slots.map(sl => {
+      const ins = state.inscriptions.filter(i => i.standId === st.id && i.slotTime === sl);
+      return { slot: sl, inscriptions: ins };
+    });
+    const maxRows = Math.max(...colsData.map(c => c.inscriptions.length), 0);
+
+    const head = [colsData.map(c => {
+      const used = c.inscriptions.length;
+      const left = st.cap - used;
+      return `${c.slot}\n${used}/${st.cap} — ${left} libre(s)`;
+    })];
+
+    const body = [];
+    // Lignes : enfant (classe)
+    for (let r = 0; r < Math.max(maxRows, st.cap); r++) {
+      body.push(colsData.map(c => {
+        const ins = c.inscriptions[r];
+        if (!ins) return '';
+        const cls = getClass(ins.classId);
+        return `${ins.childName}${cls ? ' (' + cls.name + ')' : ''}`;
+      }));
+    }
+
+    doc.autoTable({
+      startY: 26,
+      head,
+      body,
+      theme: 'grid',
+      headStyles: {
+        fillColor: secondaryColor,
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+        fontSize: 9,
+        halign: 'center',
+        valign: 'middle',
+        minCellHeight: 14,
+      },
+      bodyStyles: {
+        fontSize: 9,
+        textColor: [30, 30, 50],
+        halign: 'center',
+        valign: 'middle',
+        minCellHeight: 8,
+      },
+      alternateRowStyles: { fillColor: lightGray },
+      styles: { lineColor: borderColor, lineWidth: 0.3, overflow: 'linebreak' },
+      margin: { left: 10, right: 10 },
+      tableWidth: 'auto',
+      didDrawCell: (data) => {
+        // Mise en évidence si la cellule est vide (place libre)
+        if (data.section === 'body' && data.cell.raw === '') {
+          doc.setFillColor(240, 253, 244); // vert très clair
+          doc.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, 'F');
+        }
+      },
+    });
+
+    // Pied de page
+    doc.setFontSize(8);
+    doc.setTextColor(160, 160, 180);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Kermesse École Saint-Martin — 21 juin 2026`, 14, doc.internal.pageSize.getHeight() - 6);
+    doc.text(`Page ${idx + 2}`, W - 14, doc.internal.pageSize.getHeight() - 6, { align: 'right' });
+  });
+
+  doc.save('planning-kermesse-2026.pdf');
+  toast('✅ PDF généré !');
 }
 
 // ── INSCRIPTION ──────────────────────────────────────────────
