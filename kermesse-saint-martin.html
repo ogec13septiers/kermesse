@@ -46,15 +46,14 @@
 
   /* ADMIN BADGE */
   #admin-badge {
-    position: fixed; top: 0.8rem; right: 1rem;
     display: flex; align-items: center; gap: 0.45rem;
-    background: white; border-radius: 20px; padding: 0.3rem 0.8rem;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    font-size: 0.75rem; font-weight: 700; z-index: 500;
-    border: 2px solid #d0dae8; cursor: pointer; transition: all 0.2s;
+    background: rgba(255,255,255,0.15); border-radius: 20px; padding: 0.3rem 0.8rem;
+    font-size: 0.75rem; font-weight: 700;
+    border: 2px solid rgba(255,255,255,0.35); cursor: pointer; transition: all 0.2s;
+    color: white; white-space: nowrap; flex-shrink: 0;
   }
   #admin-badge.active { border-color: var(--accent); color: #7a4a00; background: #fef6e4; }
-  #admin-badge:hover { transform: translateY(-1px); }
+  #admin-badge:hover { background: rgba(255,255,255,0.25); }
 
   /* HEADER */
   header {
@@ -242,10 +241,13 @@
 
   @media (max-width:640px) {
     main { padding:1rem; }
-    .header-inner { padding:0.6rem 1rem; }
+    .header-inner { padding:0.6rem 1rem; gap:0.7rem; }
     .nav-inner { padding:0 0.5rem; }
     .nav-btn { font-size:0.78rem; padding:0.65rem 0.7rem; }
     .header-logo { width:50px; height:50px; }
+    .header-title h1 { font-size:1.15rem; }
+    .header-title p  { font-size:0.75rem; }
+    #admin-badge span { display:none; }
   }
 </style>
 </head>
@@ -256,9 +258,6 @@
   <h2>🎪 Kermesse École Saint-Martin</h2>
   <p>Chargement des données…</p>
 </div>
-
-<!-- ADMIN BADGE -->
-<div id="admin-badge" onclick="toggleAdminMode()">🔒 <span id="admin-badge-txt">Mode admin</span></div>
 
 <!-- MODAL MOT DE PASSE ADMIN -->
 <div id="admin-modal">
@@ -282,6 +281,7 @@
       <h1>Kermesse École Saint-Martin</h1>
       <p>Dimanche 21 juin 2026 — Gestion des stands &amp; inscriptions</p>
     </div>
+    <div id="admin-badge" onclick="toggleAdminMode()">🔒 <span id="admin-badge-txt">Mode admin</span></div>
   </div>
   <nav>
     <div class="nav-inner">
