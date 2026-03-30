@@ -1189,7 +1189,8 @@ function importExcel(event) {
   event.target.value = '';
 }
 
-// ── NON ASSIGNÉS ─────────────────────────────────────────────function renderNonAssignes() {
+// ── NON ASSIGNÉS ─────────────────────────────────────────────
+function renderNonAssignes() {
   const assigned = new Set(state.inscriptions.map(i=>i.classId+'|'+i.childName));
   const byClass  = state.classes.map(cls => ({
     cls, unassigned: (cls.children||[]).filter(ch=>!assigned.has(cls.id+'|'+ch))
