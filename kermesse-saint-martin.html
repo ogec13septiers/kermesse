@@ -321,6 +321,7 @@
           <option value="">— Choisir une classe —</option>
         </select>
       </div>
+      <div id="restriction-banner" style="display:none;background:#ede9fe;border:1px solid #c4b5fd;border-radius:10px;padding:0.65rem 1rem;font-size:0.88rem;color:#4c1d95;font-weight:600"></div>
       <div class="form-group" id="step-enfant" style="display:none">
         <label>👧 Étape 2 — Enfant(s) concerné(s)</label>
         <div class="children-grid" id="enfants-grid"></div>
@@ -919,13 +920,28 @@ function refreshStandSelect(classId) {
 
 window.onClasseChange = () => {
   const cid = $('sel-classe').value;
-  if (!cid) { $('step-enfant').style.display='none'; $('step-stand').style.display='none'; return; }
+  const banner = $('restriction-banner');
+  if (!cid) {
+    $('step-enfant').style.display='none';
+    $('step-stand').style.display='none';
+    banner.style.display='none';
+    return;
+  }
   const cls = getClass(cid);
   $('enfants-grid').innerHTML = (cls.children||[]).map(ch=>
     `<label class="child-check"><input type="checkbox" name="enfant" value="${ch}"/> ${ch}</label>`).join('');
   $('step-enfant').style.display='flex';
   $('step-creneau').style.display='none';
   $('step-submit').style.display='none';
+  // Bandeau de restriction
+  const restrictedStandId = state.classRestrictions[cid];
+  if (restrictedStandId) {
+    const st = state.stands.find(s => s.id === restrictedStandId);
+    banner.innerHTML = `ℹ️ La classe <strong>${cls.name}</strong> n'a accès qu'au stand <strong>${st ? st.emoji + ' ' + st.name : restrictedStandId}</strong>.`;
+    banner.style.display = 'block';
+  } else {
+    banner.style.display = 'none';
+  }
   // Rafraîchir les stands selon la restriction éventuelle
   refreshStandSelect(cid);
   $('step-stand').style.display='flex';
