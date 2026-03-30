@@ -508,7 +508,7 @@ async function initFirebase() {
 // ── PERSISTANCE FIREBASE ────────────────────────────────────
 async function saveData() {
   try {
-    await db.ref('/').set({
+    await db.ref('/').update({
       stands: state.stands,
       classes: state.classes,
       inscriptions: state.inscriptions,
