@@ -1118,7 +1118,7 @@ function renderClasses() {
           : cls.children.map(ch=>`
             <div class="child-item">
               <span>👤 ${ch}</span>
-              <button class="btn btn-danger btn-sm" onclick="removeChild('${cls.id}','${ch}')">✕</button>
+              <button class="btn btn-danger btn-sm" onclick="removeChildFromClass('${cls.id}','${ch}')">✕</button>
             </div>`).join('')}
         <div class="add-child-form">
           <input type="text" placeholder="Prénom Nom" id="ci-${cls.id}"
@@ -1150,7 +1150,7 @@ window.addChild = async classId => {
   }
 };
 
-window.removeChild = (classId, childName) => {
+window.removeChildFromClass = (classId, childName) => {
   if (!confirm(`Supprimer ${childName} ?`)) return;
   const cls = getClass(classId);
   cls.children = (cls.children||[]).filter(c=>c!==childName);
