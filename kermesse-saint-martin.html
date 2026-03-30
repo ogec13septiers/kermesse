@@ -913,7 +913,7 @@ function renderInscriptionSelects() {
 
 function refreshStandSelect(classId) {
   const ss = $('sel-stand'), prevS = ss.value;
-  const restrictedStandId = classId ? (state.classRestrictions[classId] || null) : null;
+  const restrictedStandId = (!isAdmin && classId) ? (state.classRestrictions[classId] || null) : null;
   const standsToShow = restrictedStandId
     ? state.stands.filter(s => s.id === restrictedStandId)
     : state.stands;
@@ -926,12 +926,13 @@ function refreshStandSelect(classId) {
     const ok = s.slots.some(sl=>slotLeft(s,sl)>0);
     ss.innerHTML += `<option value="${s.id}" ${s.id===prevS?'selected':''}>${s.emoji} ${s.name}${ok?'':' (complet)'}</option>`;
   });
-  // Si restriction et un seul stand disponible, le sélectionner automatiquement
-  // (seulement si un enfant est déjà choisi)
+  // Si restriction et un seul stand disponible, le sélectionner et afficher les créneaux
   if (restrictedStandId && standsToShow.length === 1 && $('sel-enfant').value) {
     ss.value = standsToShow[0].id;
     window.onStandChange();
+    return true; // indique que les créneaux ont déjà été affichés
   }
+  return false;
 }
 
 window.onClasseChange = () => {
@@ -955,8 +956,8 @@ window.onClasseChange = () => {
   $('step-stand').style.display='none';
   $('step-creneau').style.display='none';
   $('step-submit').style.display='none';
-  // Bandeau de restriction
-  const restrictedStandId = state.classRestrictions[cid];
+  // Bandeau de restriction (masqué en mode admin)
+  const restrictedStandId = !isAdmin && state.classRestrictions[cid];
   if (restrictedStandId) {
     const st = state.stands.find(s => s.id === restrictedStandId);
     banner.innerHTML = `ℹ️ La classe <strong>${cls.name}</strong> n'a accès qu'au stand <strong>${st ? st.emoji + ' ' + st.name : restrictedStandId}</strong>.`;
@@ -969,11 +970,18 @@ window.onClasseChange = () => {
 window.onEnfantChange = () => {
   const cid = $('sel-classe').value;
   const enfant = $('sel-enfant').value;
-  if (!enfant) { $('step-stand').style.display='none'; $('step-creneau').style.display='none'; $('step-submit').style.display='none'; return; }
-  refreshStandSelect(cid);
+  if (!enfant) {
+    $('step-stand').style.display='none';
+    $('step-creneau').style.display='none';
+    $('step-submit').style.display='none';
+    return;
+  }
+  const creneauxDejaAffichés = refreshStandSelect(cid);
   $('step-stand').style.display='flex';
-  $('step-creneau').style.display='none';
-  $('step-submit').style.display='none';
+  if (!creneauxDejaAffichés) {
+    $('step-creneau').style.display='none';
+    $('step-submit').style.display='none';
+  }
 };
 
 window.onStandChange = () => {
