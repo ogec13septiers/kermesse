@@ -7,6 +7,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;500;600;700;800&family=Nunito:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root {
     --primary: #2EB1D5;
@@ -289,9 +290,9 @@
     <div class="nav-inner">
       <button class="nav-btn active" onclick="showPage('planning')"    id="nav-planning">📋 Planning</button>
       <button class="nav-btn"        onclick="showPage('inscription')" id="nav-inscription">✍️ Inscription</button>
+      <button class="nav-btn admin-only" onclick="showPage('parametres')"  id="nav-parametres">🏕️ Gestion des stands</button>
       <button class="nav-btn admin-only" onclick="showPage('classes')"     id="nav-classes">👨‍👩‍👧 Gestion des classes</button>
       <button class="nav-btn admin-only" onclick="showPage('nonassignes')" id="nav-nonassignes">⚠️ Non positionnés</button>
-      <button class="nav-btn admin-only" onclick="showPage('parametres')"  id="nav-parametres">⚙️ Paramètres</button>
     </div>
   </nav>
 </header>
@@ -360,6 +361,25 @@
 <div class="page" id="page-classes">
   <div class="page-header"><span style="font-size:1.8rem">👨‍👩‍👧</span><h2>Gestion des classes &amp; enfants</h2></div>
   <div class="admin-banner">🔑 Mode administrateur — Gestion des classes</div>
+
+  <!-- Import / Export Excel -->
+  <div class="settings-section" style="margin-bottom:1.5rem">
+    <div class="settings-section-title">📊 Import / Export Excel des élèves</div>
+    <div class="card">
+      <p style="color:var(--text-light);font-size:0.88rem;margin-bottom:1rem">
+        Le fichier Excel doit contenir deux colonnes : <strong>Classe</strong> et <strong>Élève</strong>.<br>
+        L'import <em>fusionne</em> les données existantes (ne supprime pas les classes existantes).
+      </p>
+      <div class="export-import-row">
+        <button class="btn btn-secondary" onclick="exportExcel()">📥 Exporter Excel</button>
+        <label class="btn btn-secondary" style="cursor:pointer">
+          📤 Importer Excel
+          <input type="file" accept=".xlsx,.xls,.csv" onchange="importExcel(event)" style="display:none" />
+        </label>
+      </div>
+    </div>
+  </div>
+
   <div class="add-class-form">
     <div class="form-group" style="flex:1;min-width:180px">
       <label>➕ Nouvelle classe</label>
@@ -379,9 +399,9 @@
   <div id="unassigned-container"><div style="color:var(--text-light)">Chargement…</div></div>
 </div>
 
-<!-- PARAMÈTRES (admin) -->
+<!-- PARAMÈTRES / GESTION DES STANDS (admin) -->
 <div class="page" id="page-parametres">
-  <div class="page-header"><span style="font-size:1.8rem">⚙️</span><h2>Paramètres des stands</h2></div>
+  <div class="page-header"><span style="font-size:1.8rem">🏕️</span><h2>Gestion des stands</h2></div>
   <div class="admin-banner">🔑 Mode administrateur — Configuration des stands et créneaux</div>
 
   <!-- Ajouter un nouveau stand -->
@@ -408,6 +428,15 @@
   <div class="settings-section">
     <div class="settings-section-title">🏕️ Stands configurés</div>
     <div class="stands-admin-grid" id="stands-admin-grid"></div>
+  </div>
+
+  <!-- Restrictions classes → stand -->
+  <div class="settings-section">
+    <div class="settings-section-title">🔒 Restrictions : classe → stand unique</div>
+    <div class="card">
+      <p style="color:var(--text-light);font-size:0.88rem;margin-bottom:1rem">Si une restriction est définie pour une classe, ses élèves ne pourront s'inscrire qu'à ce stand lors de l'inscription.</p>
+      <div id="class-restrictions-grid"></div>
+    </div>
   </div>
 
   <!-- Export / Import -->
@@ -437,7 +466,7 @@ const CLASSES_ORDER = ['TPS/PS','MS','GS','CP','CE1','CE2','CM1','CM2'];
 
 let db = null;
 let adminPassword = null;
-let state = { classes:[], inscriptions:[], stands:[] };
+let state = { classes:[], inscriptions:[], stands:[], classRestrictions:{} };
 let selectedSlot = null;
 let isAdmin = false;
 
@@ -451,8 +480,9 @@ function toast(msg, type='success') {
 }
 
 function getClass(id) { return state.classes.find(c => c.id === id); }
+function slotCap(s, slot)  { return (s.slotCaps && s.slotCaps[slot]) ? s.slotCaps[slot] : s.cap; }
 function slotUsed(sId, slot) { return state.inscriptions.filter(i => i.standId===sId && i.slotTime===slot).length; }
-function slotLeft(s, slot)   { return s.cap - slotUsed(s.id, slot); }
+function slotLeft(s, slot)   { return slotCap(s, slot) - slotUsed(s.id, slot); }
 function slotNames(sId, slot){ return state.inscriptions.filter(i => i.standId===sId && i.slotTime===slot).map(i=>i.childName); }
 
 function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
@@ -472,7 +502,8 @@ async function saveData() {
     await db.ref('/').set({
       stands: state.stands,
       classes: state.classes,
-      inscriptions: state.inscriptions
+      inscriptions: state.inscriptions,
+      classRestrictions: state.classRestrictions
     });
   } catch(err) {
     console.warn('Erreur save Firebase:', err.message);
@@ -486,12 +517,14 @@ async function loadData() {
     state.stands = data.stands || [];
     state.classes = data.classes || [];
     state.inscriptions = data.inscriptions || [];
+    state.classRestrictions = data.classRestrictions || {};
     adminPassword = data.adminPassword || null;
   } catch(err) {
     console.warn('Erreur load Firebase:', err.message);
     state.stands = [];
     state.classes = [];
     state.inscriptions = [];
+    state.classRestrictions = {};
     adminPassword = null;
   }
 
@@ -499,6 +532,20 @@ async function loadData() {
     const ai = CLASSES_ORDER.indexOf(a.name), bi = CLASSES_ORDER.indexOf(b.name);
     return (ai>=0 && bi>=0) ? ai-bi : a.name.localeCompare(b.name);
   });
+
+  // Ajouter le stand Restauration s'il n'existe pas encore
+  const hasRestauration = state.stands.some(s => s.id === 'restauration');
+  if (!hasRestauration) {
+    state.stands.push({
+      id: 'restauration',
+      name: 'Restauration',
+      emoji: '🍽️',
+      cap: 6,
+      slots: ['8h00/10h00', '12h00/13h30', '13h00/14h30'],
+      slotCaps: { '8h00/10h00': 6, '12h00/13h30': 7, '13h00/14h30': 7 }
+    });
+    await saveData();
+  }
 }
 
 // ── EXPORT / IMPORT ──────────────────────────────────────────
@@ -636,7 +683,7 @@ function refreshPage() {
   if (cur==='page-inscription') { renderInscriptionSelects(); renderRecentInscriptions(); }
   if (cur==='page-classes')     renderClasses();
   if (cur==='page-nonassignes') renderNonAssignes();
-  if (cur==='page-parametres')  renderParametres();
+  if (cur==='page-parametres')  { renderParametres(); renderRestrictions(); }
 }
 
 // ── NAVIGATION ───────────────────────────────────────────────
@@ -655,12 +702,12 @@ window.showPage = id => {
   if (id==='inscription') { renderInscriptionSelects(); renderRecentInscriptions(); }
   if (id==='classes')     renderClasses();
   if (id==='nonassignes') renderNonAssignes();
-  if (id==='parametres')  renderParametres();
+  if (id==='parametres')  { renderParametres(); renderRestrictions(); }
 };
 
 // ── PLANNING ─────────────────────────────────────────────────
 function renderPlanning() {
-  const totalCap  = state.stands.reduce((s,st) => s + st.slots.length * st.cap, 0);
+  const totalCap  = state.stands.reduce((s,st) => s + st.slots.reduce((a,sl)=>a+slotCap(st,sl),0), 0);
   const occupied  = state.inscriptions.length;
   const pct       = totalCap ? Math.round(occupied/totalCap*100) : 0;
   const totalKids = state.classes.reduce((s,c) => s+(c.children||[]).length, 0);
@@ -677,18 +724,18 @@ function renderPlanning() {
       <div class="stand-header">
         <span class="stand-emoji">${st.emoji}</span>
         <span class="stand-name">${st.name}</span>
-        <small style="opacity:0.8">${st.cap} par créneau</small>
-      </div>
+        <small style="opacity:0.8">${st.cap} par créneau</small>      </div>
       <div class="stand-slots">
         ${st.slots.map(sl => {
-          const used = slotUsed(st.id,sl), left = st.cap-used, names = slotNames(st.id,sl);
+          const cap  = slotCap(st,sl);
+          const used = slotUsed(st.id,sl), left = cap-used, names = slotNames(st.id,sl);
           const cls  = left===0?'full':(used>0?'partial':'available');
           const badge= left===0
             ? `<span class="badge badge-full">Complet</span>`
             : (used>0 ? `<span class="badge badge-partial">${left} place(s)</span>` : `<span class="badge badge-ok">${left} libre(s)</span>`);
           return `<div class="slot ${cls}">
             <div class="slot-time">${sl}</div>
-            <div class="slot-count">${used}/${st.cap} ${badge}</div>
+            <div class="slot-count">${used}/${cap} ${badge}</div>
             ${names.length?`<div class="slot-names">${names.map(n=>`• ${n}`).join('<br>')}</div>`:''}
           </div>`;
         }).join('')}
@@ -767,22 +814,22 @@ function exportPdf() {
     doc.rect(0, 18, W, 3, 'F');
 
     // Tableau : une colonne par créneau
-    // Construire les données : trouver le max d'inscrits sur un créneau pour avoir assez de lignes
     const colsData = st.slots.map(sl => {
       const ins = state.inscriptions.filter(i => i.standId === st.id && i.slotTime === sl);
-      return { slot: sl, inscriptions: ins };
+      const cap = slotCap(st, sl);
+      return { slot: sl, inscriptions: ins, cap };
     });
     const maxRows = Math.max(...colsData.map(c => c.inscriptions.length), 0);
 
     const head = [colsData.map(c => {
       const used = c.inscriptions.length;
-      const left = st.cap - used;
+      const left = c.cap - used;
       return `${c.slot}\n${used}/${st.cap} — ${left} libre(s)`;
     })];
 
     const body = [];
-    // Lignes : enfant (classe)
-    for (let r = 0; r < Math.max(maxRows, st.cap); r++) {
+    const maxCap = Math.max(...colsData.map(c => c.cap));
+    for (let r = 0; r < Math.max(maxRows, maxCap); r++) {
       body.push(colsData.map(c => {
         const ins = c.inscriptions[r];
         if (!ins) return '';
@@ -845,23 +892,43 @@ function renderInscriptionSelects() {
     sc.innerHTML += `<option value="${c.id}" ${c.id===prev?'selected':''}>${c.name} (${c.children.length} élèves)</option>`);
 
   const ss = $('sel-stand'), prevS = ss.value;
+  refreshStandSelect($('sel-classe').value);
+}
+
+function refreshStandSelect(classId) {
+  const ss = $('sel-stand'), prevS = ss.value;
+  const restrictedStandId = classId ? (state.classRestrictions[classId] || null) : null;
+  const standsToShow = restrictedStandId
+    ? state.stands.filter(s => s.id === restrictedStandId)
+    : state.stands;
+
   ss.innerHTML = '<option value="">— Choisir un stand —</option>';
-  state.stands.forEach(s => {
+  if (restrictedStandId && standsToShow.length === 0) {
+    ss.innerHTML += `<option value="" disabled>Stand restreint introuvable</option>`;
+  }
+  standsToShow.forEach(s => {
     const ok = s.slots.some(sl=>slotLeft(s,sl)>0);
     ss.innerHTML += `<option value="${s.id}" ${s.id===prevS?'selected':''}>${s.emoji} ${s.name}${ok?'':' (complet)'}</option>`;
   });
+  // Si restriction et un seul stand disponible, le sélectionner automatiquement
+  if (restrictedStandId && standsToShow.length === 1) {
+    ss.value = standsToShow[0].id;
+    window.onStandChange();
+  }
 }
 
 window.onClasseChange = () => {
   const cid = $('sel-classe').value;
-  if (!cid) { $('step-enfant').style.display='none'; return; }
+  if (!cid) { $('step-enfant').style.display='none'; $('step-stand').style.display='none'; return; }
   const cls = getClass(cid);
   $('enfants-grid').innerHTML = (cls.children||[]).map(ch=>
     `<label class="child-check"><input type="checkbox" name="enfant" value="${ch}"/> ${ch}</label>`).join('');
   $('step-enfant').style.display='flex';
-  $('step-stand').style.display='flex';
   $('step-creneau').style.display='none';
   $('step-submit').style.display='none';
+  // Rafraîchir les stands selon la restriction éventuelle
+  refreshStandSelect(cid);
+  $('step-stand').style.display='flex';
 };
 
 window.onStandChange = () => {
@@ -1053,8 +1120,76 @@ window.removeClassFn = classId => {
   toast('Classe supprimée');
 };
 
-// ── NON ASSIGNÉS ─────────────────────────────────────────────
-function renderNonAssignes() {
+// ── IMPORT / EXPORT EXCEL ────────────────────────────────────
+function exportExcel() {
+  if (!window.XLSX) { toast('Librairie Excel non chargée', 'error'); return; }
+  const rows = [['Classe', 'Élève']];
+  state.classes.forEach(cls => {
+    (cls.children || []).forEach(ch => rows.push([cls.name, ch]));
+    if (!(cls.children || []).length) rows.push([cls.name, '']);
+  });
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{ wch: 18 }, { wch: 30 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Élèves');
+  XLSX.writeFile(wb, `classes-kermesse-${new Date().toISOString().slice(0,10)}.xlsx`);
+  toast('Export Excel téléchargé ✅');
+}
+
+function importExcel(event) {
+  if (!window.XLSX) { toast('Librairie Excel non chargée', 'error'); return; }
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'binary' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      // Détecter si la première ligne est un en-tête
+      const firstRow = rows[0] || [];
+      const hasHeader = firstRow.some(c => typeof c === 'string' && /classe|élève|eleve|nom/i.test(c));
+      const dataRows = hasHeader ? rows.slice(1) : rows;
+
+      // Construire un map { nomClasse -> Set<élèves> }
+      const classMap = {};
+      dataRows.forEach(row => {
+        const className = String(row[0] || '').trim();
+        const childName = String(row[1] || '').trim();
+        if (!className) return;
+        if (!classMap[className]) classMap[className] = new Set();
+        if (childName) classMap[className].add(childName);
+      });
+
+      if (!Object.keys(classMap).length) return toast('Aucune donnée trouvée dans le fichier', 'error');
+      const nb = Object.values(classMap).reduce((s,v)=>s+v.size,0);
+      if (!confirm(`Importer ${Object.keys(classMap).length} classe(s) et ${nb} élève(s) ?\nLes classes existantes seront conservées, les élèves fusionnés.`)) return;
+
+      // Fusionner dans state
+      Object.entries(classMap).forEach(([name, children]) => {
+        let cls = state.classes.find(c => c.name === name);
+        if (!cls) {
+          cls = { id: name.toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,12) + genId().slice(0,4), name, children: [] };
+          state.classes.push(cls);
+        }
+        children.forEach(ch => { if (!cls.children.includes(ch)) cls.children.push(ch); });
+      });
+      state.classes.sort((a,b) => {
+        const ai = CLASSES_ORDER.indexOf(a.name), bi = CLASSES_ORDER.indexOf(b.name);
+        return (ai>=0 && bi>=0) ? ai-bi : a.name.localeCompare(b.name);
+      });
+      saveData();
+      renderClasses();
+      toast(`✅ Import réussi : ${Object.keys(classMap).length} classe(s), ${nb} élève(s)`);
+    } catch(err) {
+      toast('Erreur lors de la lecture du fichier : ' + err.message, 'error');
+    }
+  };
+  reader.readAsBinaryString(file);
+  event.target.value = '';
+}
+
+// ── NON ASSIGNÉS ─────────────────────────────────────────────function renderNonAssignes() {
   const assigned = new Set(state.inscriptions.map(i=>i.classId+'|'+i.childName));
   const byClass  = state.classes.map(cls => ({
     cls, unassigned: (cls.children||[]).filter(ch=>!assigned.has(cls.id+'|'+ch))
@@ -1080,6 +1215,37 @@ function renderNonAssignes() {
         </div>`).join('')}
     </div>`;
 }
+
+// ── RESTRICTIONS CLASSES ─────────────────────────────────────
+function renderRestrictions() {
+  const g = $('class-restrictions-grid');
+  if (!g) return;
+  if (!state.classes.length) { g.innerHTML='<div style="color:var(--text-light);font-size:0.85rem">Aucune classe configurée.</div>'; return; }
+  g.innerHTML = state.classes.map(cls => {
+    const current = state.classRestrictions[cls.id] || '';
+    const opts = state.stands.map(st =>
+      `<option value="${st.id}" ${current===st.id?'selected':''}>${st.emoji} ${st.name}</option>`
+    ).join('');
+    return `<div style="display:flex;align-items:center;gap:0.8rem;padding:0.5rem 0;border-bottom:1px solid var(--border)">
+      <span style="flex:1;font-weight:700;font-size:0.9rem">📚 ${cls.name}</span>
+      <select style="flex:2;border:1px solid var(--border);border-radius:8px;padding:0.35rem 0.6rem;font-size:0.85rem"
+        onchange="updateRestriction('${cls.id}',this.value)">
+        <option value="">— Accès libre (tous les stands) —</option>
+        ${opts}
+      </select>
+    </div>`;
+  }).join('');
+}
+
+window.updateRestriction = (classId, standId) => {
+  if (standId) {
+    state.classRestrictions[classId] = standId;
+  } else {
+    delete state.classRestrictions[classId];
+  }
+  saveData();
+  toast('Restriction mise à jour ✅');
+};
 
 // ── PARAMÈTRES STANDS ────────────────────────────────────────
 function renderParametres() {
