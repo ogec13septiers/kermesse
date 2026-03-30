@@ -483,7 +483,13 @@ function toast(msg, type='success') {
 }
 
 function getClass(id) { return state.classes.find(c => c.id === id); }
-function slotCap(s, slot)  { return (s.slotCaps && s.slotCaps[slot]) ? s.slotCaps[slot] : s.cap; }
+function slotCap(s, slot) {
+  if (s.slotCapsList && s.slotCapsList.length) {
+    const idx = s.slots.indexOf(slot);
+    if (idx >= 0 && s.slotCapsList[idx] != null) return s.slotCapsList[idx];
+  }
+  return s.cap;
+}
 function slotUsed(sId, slot) { return state.inscriptions.filter(i => i.standId===sId && i.slotTime===slot).length; }
 function slotLeft(s, slot)   { return slotCap(s, slot) - slotUsed(s.id, slot); }
 function slotNames(sId, slot){ return state.inscriptions.filter(i => i.standId===sId && i.slotTime===slot).map(i=>i.childName); }
@@ -522,6 +528,13 @@ async function loadData() {
     state.inscriptions = data.inscriptions || [];
     state.classRestrictions = data.classRestrictions || {};
     adminPassword = data.adminPassword || null;
+    // Migration : convertir slotCaps (objet, clés invalides Firebase) en slotCapsList (tableau)
+    state.stands.forEach(st => {
+      if (st.slotCaps && !st.slotCapsList) {
+        st.slotCapsList = st.slots.map(sl => st.slotCaps[sl] || st.cap);
+        delete st.slotCaps;
+      }
+    });
   } catch(err) {
     console.warn('Erreur load Firebase:', err.message);
     state.stands = [];
@@ -545,7 +558,7 @@ async function loadData() {
       emoji: '🍽️',
       cap: 6,
       slots: ['8h00/10h00', '12h00/13h30', '13h00/14h30'],
-      slotCaps: { '8h00/10h00': 6, '12h00/13h30': 7, '13h00/14h30': 7 }
+      slotCapsList: [6, 7, 7]
     });
     await saveData();
   }
