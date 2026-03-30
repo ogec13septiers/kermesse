@@ -323,8 +323,10 @@
       </div>
       <div id="restriction-banner" style="display:none;background:#ede9fe;border:1px solid #c4b5fd;border-radius:10px;padding:0.65rem 1rem;font-size:0.88rem;color:#4c1d95;font-weight:600"></div>
       <div class="form-group" id="step-enfant" style="display:none">
-        <label>👧 Étape 2 — Enfant(s) concerné(s)</label>
-        <div class="children-grid" id="enfants-grid"></div>
+        <label>👧 Étape 2 — Enfant concerné</label>
+        <select id="sel-enfant" onchange="onEnfantChange()">
+          <option value="">— Choisir un enfant —</option>
+        </select>
       </div>
       <div class="form-group" id="step-stand" style="display:none">
         <label>🎡 Étape 3 — Choix du stand</label>
@@ -912,7 +914,8 @@ function refreshStandSelect(classId) {
     ss.innerHTML += `<option value="${s.id}" ${s.id===prevS?'selected':''}>${s.emoji} ${s.name}${ok?'':' (complet)'}</option>`;
   });
   // Si restriction et un seul stand disponible, le sélectionner automatiquement
-  if (restrictedStandId && standsToShow.length === 1) {
+  // (seulement si un enfant est déjà choisi)
+  if (restrictedStandId && standsToShow.length === 1 && $('sel-enfant').value) {
     ss.value = standsToShow[0].id;
     window.onStandChange();
   }
@@ -928,9 +931,15 @@ window.onClasseChange = () => {
     return;
   }
   const cls = getClass(cid);
-  $('enfants-grid').innerHTML = (cls.children||[]).map(ch=>
-    `<label class="child-check"><input type="checkbox" name="enfant" value="${ch}"/> ${ch}</label>`).join('');
+  // Peupler le select enfant
+  const selEnfant = $('sel-enfant');
+  selEnfant.innerHTML = '<option value="">— Choisir un enfant —</option>';
+  (cls.children||[]).forEach(ch => {
+    selEnfant.innerHTML += `<option value="${ch}">${ch}</option>`;
+  });
+  selEnfant.value = '';
   $('step-enfant').style.display='flex';
+  $('step-stand').style.display='none';
   $('step-creneau').style.display='none';
   $('step-submit').style.display='none';
   // Bandeau de restriction
@@ -942,9 +951,16 @@ window.onClasseChange = () => {
   } else {
     banner.style.display = 'none';
   }
-  // Rafraîchir les stands selon la restriction éventuelle
+};
+
+window.onEnfantChange = () => {
+  const cid = $('sel-classe').value;
+  const enfant = $('sel-enfant').value;
+  if (!enfant) { $('step-stand').style.display='none'; $('step-creneau').style.display='none'; $('step-submit').style.display='none'; return; }
   refreshStandSelect(cid);
   $('step-stand').style.display='flex';
+  $('step-creneau').style.display='none';
+  $('step-submit').style.display='none';
 };
 
 window.onStandChange = () => {
@@ -972,26 +988,26 @@ window.selectSlot = (el, sl) => {
 };
 
 window.submitInscription = () => {
-  const cid  = $('sel-classe').value;
-  const sid  = $('sel-stand').value;
-  const kids = [...document.querySelectorAll('input[name="enfant"]:checked')].map(x=>x.value);
-  if (!cid)  return toast('Choisissez une classe','error');
-  if (!kids.length) return toast('Sélectionnez au moins un enfant','error');
-  if (!sid)  return toast('Choisissez un stand','error');
+  const cid       = $('sel-classe').value;
+  const sid       = $('sel-stand').value;
+  const childName = $('sel-enfant').value;
+  if (!cid)       return toast('Choisissez une classe','error');
+  if (!childName) return toast('Choisissez un enfant','error');
+  if (!sid)       return toast('Choisissez un stand','error');
   if (!selectedSlot) return toast('Choisissez un créneau','error');
   const s = state.stands.find(x=>x.id===sid);
   const left = slotLeft(s, selectedSlot);
-  if (kids.length > left) return toast(`Seulement ${left} place(s) disponible(s)`,'error');
+  if (left < 1) return toast('Plus de place disponible sur ce créneau','error');
 
-  kids.forEach(childName => {
-    state.inscriptions.push({
-      id: genId(),
-      childName, classId:cid, standId:sid, slotTime:selectedSlot, createdAt:Date.now()
-    });
+  state.inscriptions.push({
+    id: genId(),
+    childName, classId:cid, standId:sid, slotTime:selectedSlot, createdAt:Date.now()
   });
   saveData();
-  toast(`✅ ${kids.length} inscription(s) enregistrée(s) !`);
+  toast('✅ Inscription enregistrée !');
   $('sel-classe').value='';
+  $('sel-enfant').value='';
+  $('restriction-banner').style.display='none';
   ['step-enfant','step-stand','step-creneau','step-submit'].forEach(id=>$(id).style.display='none');
   selectedSlot = null;
   renderRecentInscriptions();
@@ -1092,17 +1108,25 @@ function renderClasses() {
     </div>`).join('');
 }
 
-window.addChild = classId => {
-  const inp = $('ci-'+classId), name = inp.value.trim();
+window.addChild = async classId => {
+  const inp = $('ci-'+classId);
+  if (!inp) return;
+  const name = inp.value.trim();
   if (!name) return;
   const cls = getClass(classId);
   if ((cls.children||[]).includes(name)) return toast('Cet enfant existe déjà','error');
-  inp.value = '';
-  const sorted = [...(cls.children||[]), name].sort();
-  cls.children = sorted;
-  saveData();
-  renderClasses();
-  toast('Enfant ajouté ✅');
+  cls.children = [...(cls.children||[]), name].sort();
+  try {
+    await saveData();
+    inp.value = '';
+    renderClasses();
+    toast('Enfant ajouté ✅');
+  } catch(err) {
+    // Rollback
+    cls.children = cls.children.filter(c => c !== name);
+    toast('Erreur lors de la sauvegarde', 'error');
+    console.error(err);
+  }
 };
 
 window.removeChild = (classId, childName) => {
