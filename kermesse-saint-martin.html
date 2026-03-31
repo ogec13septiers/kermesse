@@ -265,6 +265,20 @@
   .benevolat-option-label span { font-size:0.8rem; color:var(--text-light); }
   .benevolat-modal-actions { display:flex; gap:0.8rem; justify-content:flex-end; margin-top:1.2rem; }
 
+  /* MODAL REPAS */
+  #repas-modal {
+    display:none; position:fixed; inset:0; background:rgba(10,20,40,0.55);
+    z-index:2000; align-items:center; justify-content:center;
+  }
+  #repas-modal.open { display:flex; }
+  .repas-modal-box {
+    background:white; border-radius:16px; padding:2rem; max-width:420px; width:92%;
+    box-shadow:0 16px 50px rgba(0,0,0,0.25); text-align:center;
+  }
+  .repas-modal-box h3 { font-family:'Baloo 2',sans-serif; font-size:1.2rem; font-weight:800; color:var(--secondary); margin-bottom:0.4rem; }
+  .repas-modal-box p  { color:var(--text-light); font-size:0.88rem; margin-bottom:1.4rem; line-height:1.5; }
+  .repas-modal-actions { display:flex; gap:0.8rem; justify-content:center; margin-top:1rem; flex-wrap:wrap; }
+
   /* BÉNÉVOLAT TABLE */
   .benevolat-table { width:100%; border-collapse:collapse; font-size:0.88rem; }
   .benevolat-table th { background:linear-gradient(135deg,var(--secondary),var(--primary)); color:white; padding:0.6rem 0.9rem; text-align:left; font-weight:700; font-size:0.82rem; }
@@ -321,6 +335,20 @@
   </div>
 </div>
 
+<!-- MODAL REPAS / HELLOASSO -->
+<div id="repas-modal">
+  <div class="repas-modal-box">
+    <div style="font-size:2rem;margin-bottom:0.5rem">🍽️</div>
+    <h3>Réserver vos repas</h3>
+    <p>Pensez à réserver vos repas pour la kermesse via HelloAsso !<br>
+       Cliquez sur "Réserver" pour ouvrir le formulaire dans un nouvel onglet.</p>
+    <div class="repas-modal-actions">
+      <button class="btn btn-secondary" onclick="closeRepasModal()">Plus tard</button>
+      <button class="btn btn-primary" onclick="openHelloAsso()">🍽️ Réserver mes repas</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL MOT DE PASSE ADMIN -->
 <div id="admin-modal">
   <div class="admin-modal-box">
@@ -353,6 +381,7 @@
       <button class="nav-btn admin-only" onclick="showPage('classes')"     id="nav-classes">👨‍👩‍👧 Gestion des classes</button>
       <button class="nav-btn admin-only" onclick="showPage('nonassignes')" id="nav-nonassignes">⚠️ Non positionnés</button>
       <button class="nav-btn admin-only" onclick="showPage('benevolat')"   id="nav-benevolat">🔧 Mise en place/rangement</button>
+      <button class="nav-btn admin-only" onclick="showPage('reglages')"    id="nav-reglages">⚙️ Paramètres</button>
     </div>
   </nav>
 </header>
@@ -543,6 +572,48 @@
   </div>
 </div>
 
+<!-- PARAMÈTRES GÉNÉRAUX (admin) -->
+<div class="page" id="page-reglages">
+  <div class="page-header"><span style="font-size:1.8rem">⚙️</span><h2>Paramètres</h2></div>
+  <div class="admin-banner">🔑 Mode administrateur — Paramètres généraux de la kermesse</div>
+
+  <div style="display:grid;gap:1.5rem;max-width:640px">
+
+    <div class="card">
+      <div class="card-title">📅 Date &amp; intitulé de la kermesse</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Texte affiché dans le bandeau (sous-titre)</label>
+          <input type="text" id="setting-subtitle"
+            placeholder="ex: Dimanche 21 juin 2026 — Gestion des stands &amp; inscriptions"
+            oninput="previewSettings()" />
+        </div>
+        <div style="background:#f3f5fb;border-radius:8px;padding:0.7rem 1rem;font-size:0.85rem;color:var(--text-light)">
+          Aperçu : <strong id="setting-subtitle-preview"></strong>
+        </div>
+        <button class="btn btn-primary" onclick="saveSettings()" style="align-self:start">💾 Enregistrer</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🍽️ Lien HelloAsso — Réservation des repas</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>URL HelloAsso (laissez vide pour ne pas proposer la réservation)</label>
+          <input type="url" id="setting-helloasso"
+            placeholder="https://www.helloasso.com/associations/..."
+            oninput="previewSettings()" />
+        </div>
+        <p style="font-size:0.83rem;color:var(--text-light)">
+          Ce lien sera proposé à chaque parent après validation de son inscription, dans une fenêtre dédiée.
+        </p>
+        <button class="btn btn-primary" onclick="saveSettings()" style="align-self:start">💾 Enregistrer</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
 </main>
 <div id="toast"></div>
 
@@ -553,7 +624,7 @@ const CLASSES_ORDER = ['TPS/PS','MS','GS','CP','CE1','CE2','CM1','CM2'];
 
 let db = null;
 let adminPassword = null;
-let state = { classes:[], inscriptions:[], stands:[], classRestrictions:{}, volunteering:[] };
+let state = { classes:[], inscriptions:[], stands:[], classRestrictions:{}, volunteering:[], settings:{} };
 let selectedSlot = null;
 let isAdmin = false;
 
@@ -597,7 +668,8 @@ async function saveData() {
       classes: state.classes,
       inscriptions: state.inscriptions,
       classRestrictions: state.classRestrictions,
-      volunteering: state.volunteering
+      volunteering: state.volunteering,
+      settings: state.settings
     });
   } catch(err) {
     console.warn('Erreur save Firebase:', err.message);
@@ -613,6 +685,7 @@ async function loadData() {
     state.inscriptions = data.inscriptions || [];
     state.classRestrictions = data.classRestrictions || {};
     state.volunteering = data.volunteering || [];
+    state.settings = data.settings || {};
     adminPassword = data.adminPassword || null;
     // Migration : convertir slotCaps (objet, clés invalides Firebase) en slotCapsList (tableau)
     state.stands.forEach(st => {
@@ -628,6 +701,7 @@ async function loadData() {
     state.inscriptions = [];
     state.classRestrictions = {};
     state.volunteering = [];
+    state.settings = {};
     adminPassword = null;
   }
 
@@ -756,7 +830,7 @@ function applyAdminUI() {
     adminBtns.forEach(b => b.classList.remove('visible'));
     $('btn-export-pdf').style.display = 'none';
     // Redirect to planning if on admin-only page
-    if (activePage && ['page-classes','page-nonassignes','page-parametres','page-benevolat'].includes(activePage.id)) {
+    if (activePage && ['page-classes','page-nonassignes','page-parametres','page-benevolat','page-reglages'].includes(activePage.id)) {
       showPage('planning');
     }
   }
@@ -777,6 +851,7 @@ async function init() {
     toast('Erreur de connexion à Firebase', 'error');
   }
   $('app-loader').classList.add('hidden');
+  applySettings();
   renderPlanning();
 }
 
@@ -788,12 +863,13 @@ function refreshPage() {
   if (cur==='page-nonassignes') renderNonAssignes();
   if (cur==='page-parametres')  { renderParametres(); renderRestrictions(); }
   if (cur==='page-benevolat')   renderBenevolat();
+  if (cur==='page-reglages')    renderReglages();
 }
 
 // ── NAVIGATION ───────────────────────────────────────────────
 window.showPage = id => {
   // Vérif admin
-  const adminPages = ['classes','nonassignes','parametres','benevolat'];
+  const adminPages = ['classes','nonassignes','parametres','benevolat','reglages'];
   if (adminPages.includes(id) && !isAdmin) {
     openAdminModal();
     return;
@@ -808,6 +884,7 @@ window.showPage = id => {
   if (id==='nonassignes') renderNonAssignes();
   if (id==='parametres')  { renderParametres(); renderRestrictions(); }
   if (id==='benevolat')   renderBenevolat();
+  if (id==='reglages')    renderReglages();
 };
 
 // ── PLANNING ─────────────────────────────────────────────────
@@ -1110,7 +1187,7 @@ window.confirmBenevolat = (save) => {
     childName, classId:cid, standId:sid, slotTime:slot, createdAt:Date.now()
   });
 
-  // Enregistrer le bénévolat (même si les deux cases sont décochées : on sait que la question a été posée)
+  // Enregistrer le bénévolat
   const installation = save && $('benv-installation').checked;
   const rangement    = save && $('benv-rangement').checked;
   if (installation || rangement) {
@@ -1131,6 +1208,12 @@ window.confirmBenevolat = (save) => {
   selectedSlot = null;
   renderRecentInscriptions();
   renderInscriptionSelects();
+
+  // Proposer la réservation repas si un lien HelloAsso est configuré
+  const helloasso = (state.settings.helloassoUrl || '').trim();
+  if (helloasso) {
+    $('repas-modal').classList.add('open');
+  }
 };
 
 function renderRecentInscriptions() {
@@ -1535,6 +1618,54 @@ window.deleteVolunteering = (id) => {
   saveData();
   renderBenevolat();
   toast('Entrée supprimée');
+};
+
+// ── REPAS / HELLOASSO ────────────────────────────────────────
+window.openHelloAsso = () => {
+  const url = (state.settings.helloassoUrl || '').trim();
+  if (url) window.open(url, '_blank', 'noopener');
+  $('repas-modal').classList.remove('open');
+};
+
+window.closeRepasModal = () => {
+  $('repas-modal').classList.remove('open');
+};
+
+// Fermer sur clic backdrop
+document.addEventListener('DOMContentLoaded', () => {
+  $('repas-modal').addEventListener('click', e => { if (e.target === $('repas-modal')) closeRepasModal(); });
+});
+
+// ── PARAMÈTRES GÉNÉRAUX ──────────────────────────────────────
+function applySettings() {
+  const sub = (state.settings.subtitle || '').trim();
+  const el = document.querySelector('.header-title p');
+  if (el) el.textContent = sub || 'Dimanche 21 juin 2026 — Gestion des stands & inscriptions';
+}
+
+function renderReglages() {
+  const s = state.settings || {};
+  const subtitleEl = $('setting-subtitle');
+  const helloassoEl = $('setting-helloasso');
+  if (subtitleEl) subtitleEl.value = s.subtitle || '';
+  if (helloassoEl) helloassoEl.value = s.helloassoUrl || '';
+  previewSettings();
+}
+
+window.previewSettings = () => {
+  const val = ($('setting-subtitle') || {}).value || '';
+  const prev = $('setting-subtitle-preview');
+  if (prev) prev.textContent = val || 'Dimanche 21 juin 2026 — Gestion des stands & inscriptions';
+};
+
+window.saveSettings = () => {
+  const sub = (($('setting-subtitle') || {}).value || '').trim();
+  const url = (($('setting-helloasso') || {}).value || '').trim();
+  state.settings.subtitle    = sub;
+  state.settings.helloassoUrl = url;
+  saveData();
+  applySettings();
+  toast('✅ Paramètres enregistrés');
 };
 
 // ── GO ───────────────────────────────────────────────────────
