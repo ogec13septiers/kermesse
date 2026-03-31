@@ -401,36 +401,13 @@
 
 <!-- INSCRIPTION -->
 <div class="page" id="page-inscription">
-  <div class="page-header"><span style="font-size:1.8rem">✍️</span><h2>Inscription d'un parent</h2></div>
+  <div class="page-header">
+    <span style="font-size:1.8rem">✍️</span>
+    <h2 id="inscription-page-title">Inscription d'un parent</h2>
+  </div>
   <div class="inscription-layout">
-    <div class="card form-grid">
-      <div class="form-group">
-        <label>🏫 Étape 1 — Classe de l'aîné</label>
-        <select id="sel-classe" onchange="onClasseChange()">
-          <option value="">— Choisir une classe —</option>
-        </select>
-      </div>
-      <div id="restriction-banner" style="display:none;background:#ede9fe;border:1px solid #c4b5fd;border-radius:10px;padding:0.65rem 1rem;font-size:0.88rem;color:#4c1d95;font-weight:600"></div>
-      <div class="form-group" id="step-enfant" style="display:none">
-        <label>👧 Étape 2 — Enfant concerné</label>
-        <select id="sel-enfant" onchange="onEnfantChange()">
-          <option value="">— Choisir un enfant —</option>
-        </select>
-      </div>
-      <div class="form-group" id="step-stand" style="display:none">
-        <label>🎡 Étape 3 — Choix du stand</label>
-        <select id="sel-stand" onchange="onStandChange()">
-          <option value="">— Choisir un stand —</option>
-        </select>
-      </div>
-      <div class="form-group" id="step-creneau" style="display:none">
-        <label>⏰ Étape 4 — Choix du créneau</label>
-        <div class="slots-container" id="slots-container"></div>
-      </div>
-      <div id="step-submit" style="display:none">
-        <button class="btn btn-primary" id="btn-valider" onclick="submitInscription()">✅ Valider l'inscription</button>
-      </div>
-    </div>
+    <!-- Formulaire : contenu rendu dynamiquement selon le mode -->
+    <div class="card form-grid" id="inscription-form"></div>
     <div class="card">
       <div class="card-title">📝 Inscriptions enregistrées</div>
       <div id="recent-inscriptions" style="font-size:0.85rem;color:var(--text-light)">Chargement…</div>
@@ -834,8 +811,11 @@ function applyAdminUI() {
       showPage('planning');
     }
   }
-  // Refresh inscription list to show/hide delete buttons
-  if (activePage && activePage.id === 'page-inscription') renderRecentInscriptions();
+  // Refresh inscription page : re-render le formulaire + liste
+  if (activePage && activePage.id === 'page-inscription') {
+    renderInscriptionSelects();
+    renderRecentInscriptions();
+  }
 }
 
 // Close modal on backdrop click
@@ -1046,38 +1026,55 @@ function exportPlanning() {
 }
 
 // ── INSCRIPTION ──────────────────────────────────────────────
-function renderInscriptionSelects() {
-  const sc = $('sel-classe'), prev = sc.value;
-  sc.innerHTML = '<option value="">— Choisir une classe —</option>';
-  state.classes.filter(c=>(c.children||[]).length>0).forEach(c =>
-    sc.innerHTML += `<option value="${c.id}" ${c.id===prev?'selected':''}>${c.name} (${c.children.length} élèves)</option>`);
 
-  const ss = $('sel-stand'), prevS = ss.value;
-  refreshStandSelect($('sel-classe').value);
+function renderInscriptionSelects() {
+  $('inscription-page-title').textContent = isAdmin ? 'Inscription (mode admin)' : 'Inscription d\'un parent';
+  const cc = $('cancel-request-card');
+  if (cc) cc.style.display = isAdmin ? 'none' : '';
+  if (isAdmin) {
+    renderAdminInscriptionForm();
+  } else {
+    renderParentInscriptionForm();
+  }
 }
 
-function refreshStandSelect(classId) {
-  const ss = $('sel-stand'), prevS = ss.value;
-  const restrictedStandId = (!isAdmin && classId) ? (state.classRestrictions[classId] || null) : null;
-  const standsToShow = restrictedStandId
-    ? state.stands.filter(s => s.id === restrictedStandId)
-    : state.stands;
+// ═══════════════════════════════════════════════════
+//  FLUX PARENT  (classe → enfant → stand → créneau)
+// ═══════════════════════════════════════════════════
+function renderParentInscriptionForm() {
+  $('inscription-form').innerHTML = `
+    <div class="form-group">
+      <label>🏫 Étape 1 — Classe de l'aîné</label>
+      <select id="sel-classe" onchange="onClasseChange()">
+        <option value="">— Choisir une classe —</option>
+      </select>
+    </div>
+    <div id="restriction-banner" style="display:none;background:#ede9fe;border:1px solid #c4b5fd;border-radius:10px;padding:0.65rem 1rem;font-size:0.88rem;color:#4c1d95;font-weight:600"></div>
+    <div class="form-group" id="step-enfant" style="display:none">
+      <label>👧 Étape 2 — Enfant concerné</label>
+      <select id="sel-enfant" onchange="onEnfantChange()">
+        <option value="">— Choisir un enfant —</option>
+      </select>
+    </div>
+    <div class="form-group" id="step-stand" style="display:none">
+      <label>🎡 Étape 3 — Choix du stand</label>
+      <select id="sel-stand" onchange="onStandChange()">
+        <option value="">— Choisir un stand —</option>
+      </select>
+    </div>
+    <div class="form-group" id="step-creneau" style="display:none">
+      <label>⏰ Étape 4 — Choix du créneau</label>
+      <div class="slots-container" id="slots-container"></div>
+    </div>
+    <div id="step-submit" style="display:none">
+      <button class="btn btn-primary" onclick="submitInscription()">✅ Valider l'inscription</button>
+    </div>`;
 
-  ss.innerHTML = '<option value="">— Choisir un stand —</option>';
-  if (restrictedStandId && standsToShow.length === 0) {
-    ss.innerHTML += `<option value="" disabled>Stand restreint introuvable</option>`;
-  }
-  standsToShow.forEach(s => {
-    const ok = s.slots.some(sl=>slotLeft(s,sl)>0);
-    ss.innerHTML += `<option value="${s.id}" ${s.id===prevS?'selected':''}>${s.emoji} ${s.name}${ok?'':' (complet)'}</option>`;
-  });
-  // Si restriction et un seul stand disponible, le sélectionner et afficher les créneaux
-  if (restrictedStandId && standsToShow.length === 1 && $('sel-enfant').value) {
-    ss.value = standsToShow[0].id;
-    window.onStandChange();
-    return true; // indique que les créneaux ont déjà été affichés
-  }
-  return false;
+  // Peupler le select classe
+  const sc = $('sel-classe');
+  state.classes.filter(c=>(c.children||[]).length>0).forEach(c =>
+    sc.innerHTML += `<option value="${c.id}">${c.name} (${c.children.length} élèves)</option>`);
+  selectedSlot = null;
 }
 
 window.onClasseChange = () => {
@@ -1090,44 +1087,47 @@ window.onClasseChange = () => {
     return;
   }
   const cls = getClass(cid);
-  // Peupler le select enfant
   const selEnfant = $('sel-enfant');
   selEnfant.innerHTML = '<option value="">— Choisir un enfant —</option>';
-  (cls.children||[]).forEach(ch => {
-    selEnfant.innerHTML += `<option value="${ch}">${ch}</option>`;
-  });
+  (cls.children||[]).forEach(ch => selEnfant.innerHTML += `<option value="${ch}">${ch}</option>`);
   selEnfant.value = '';
   $('step-enfant').style.display='flex';
   $('step-stand').style.display='none';
   $('step-creneau').style.display='none';
   $('step-submit').style.display='none';
-  // Bandeau de restriction (masqué en mode admin)
-  const restrictedStandId = !isAdmin && state.classRestrictions[cid];
+  const restrictedStandId = state.classRestrictions[cid];
   if (restrictedStandId) {
-    const st = state.stands.find(s => s.id === restrictedStandId);
-    banner.innerHTML = `ℹ️ La classe <strong>${cls.name}</strong> n'a accès qu'au stand <strong>${st ? st.emoji + ' ' + st.name : restrictedStandId}</strong>.`;
-    banner.style.display = 'block';
-  } else {
-    banner.style.display = 'none';
-  }
+    const st = state.stands.find(s=>s.id===restrictedStandId);
+    banner.innerHTML = `ℹ️ La classe <strong>${cls.name}</strong> n'a accès qu'au stand <strong>${st?st.emoji+' '+st.name:restrictedStandId}</strong>.`;
+    banner.style.display='block';
+  } else { banner.style.display='none'; }
 };
 
 window.onEnfantChange = () => {
   const cid = $('sel-classe').value;
   const enfant = $('sel-enfant').value;
-  if (!enfant) {
-    $('step-stand').style.display='none';
-    $('step-creneau').style.display='none';
-    $('step-submit').style.display='none';
-    return;
-  }
+  if (!enfant) { $('step-stand').style.display='none'; $('step-creneau').style.display='none'; $('step-submit').style.display='none'; return; }
   const creneauxDejaAffichés = refreshStandSelect(cid);
   $('step-stand').style.display='flex';
-  if (!creneauxDejaAffichés) {
-    $('step-creneau').style.display='none';
-    $('step-submit').style.display='none';
-  }
+  if (!creneauxDejaAffichés) { $('step-creneau').style.display='none'; $('step-submit').style.display='none'; }
 };
+
+function refreshStandSelect(classId) {
+  const ss = $('sel-stand'), prevS = ss.value;
+  const restrictedStandId = (!isAdmin && classId) ? (state.classRestrictions[classId]||null) : null;
+  const standsToShow = restrictedStandId ? state.stands.filter(s=>s.id===restrictedStandId) : state.stands;
+  ss.innerHTML = '<option value="">— Choisir un stand —</option>';
+  if (restrictedStandId && standsToShow.length===0)
+    ss.innerHTML += `<option value="" disabled>Stand restreint introuvable</option>`;
+  standsToShow.forEach(s => {
+    const ok = s.slots.some(sl=>slotLeft(s,sl)>0);
+    ss.innerHTML += `<option value="${s.id}" ${s.id===prevS?'selected':''}>${s.emoji} ${s.name}${ok?'':' (complet)'}</option>`;
+  });
+  if (restrictedStandId && standsToShow.length===1 && $('sel-enfant').value) {
+    ss.value = standsToShow[0].id; window.onStandChange(); return true;
+  }
+  return false;
+}
 
 window.onStandChange = () => {
   const sid = $('sel-stand').value;
@@ -1153,6 +1153,134 @@ window.selectSlot = (el, sl) => {
   $('step-submit').style.display='block';
 };
 
+// ═══════════════════════════════════════════════════
+//  FLUX ADMIN  (stand → créneau → classe → enfants)
+// ═══════════════════════════════════════════════════
+function renderAdminInscriptionForm() {
+  $('inscription-form').innerHTML = `
+    <div class="admin-banner" style="margin-bottom:0">🔑 Mode administrateur — Inscription directe</div>
+    <div class="form-group">
+      <label>🎡 Étape 1 — Choix du stand</label>
+      <select id="adm-sel-stand" onchange="admOnStandChange()">
+        <option value="">— Choisir un stand —</option>
+      </select>
+    </div>
+    <div class="form-group" id="adm-step-creneau" style="display:none">
+      <label>⏰ Étape 2 — Choix du créneau</label>
+      <div class="slots-container" id="adm-slots-container"></div>
+    </div>
+    <div class="form-group" id="adm-step-classe" style="display:none">
+      <label>🏫 Étape 3 — Choix de la classe</label>
+      <select id="adm-sel-classe" onchange="admOnClasseChange()">
+        <option value="">— Choisir une classe —</option>
+      </select>
+    </div>
+    <div class="form-group" id="adm-step-enfants" style="display:none">
+      <label>👧 Étape 4 — Enfants à inscrire</label>
+      <div id="adm-children-grid" class="children-grid"></div>
+    </div>
+    <div id="adm-step-submit" style="display:none">
+      <button class="btn btn-primary" onclick="submitAdminInscription()">✅ Valider l'inscription</button>
+    </div>`;
+
+  // Peupler les stands
+  const ss = $('adm-sel-stand');
+  state.stands.forEach(s => {
+    ss.innerHTML += `<option value="${s.id}">${s.emoji} ${s.name}</option>`;
+  });
+  selectedSlot = null;
+}
+
+window.admOnStandChange = () => {
+  const sid = $('adm-sel-stand').value;
+  $('adm-step-classe').style.display='none';
+  $('adm-step-enfants').style.display='none';
+  $('adm-step-submit').style.display='none';
+  selectedSlot = null;
+  if (!sid) { $('adm-step-creneau').style.display='none'; return; }
+  const s = state.stands.find(x=>x.id===sid);
+  $('adm-slots-container').innerHTML = s.slots.map(sl => {
+    const left = slotLeft(s,sl);
+    return `<div class="slot-option ${left<=0?'disabled':''}" onclick="admSelectSlot(this,'${sl}')">
+      <div class="slot-option-time">⏰ ${sl}</div>
+      <div class="slot-option-avail">${left>0?left+' place(s) restante(s)':'❌ Complet'}</div>
+    </div>`;
+  }).join('');
+  $('adm-step-creneau').style.display='flex';
+};
+
+window.admSelectSlot = (el, sl) => {
+  if (el.classList.contains('disabled')) return;
+  document.querySelectorAll('#adm-slots-container .slot-option').forEach(x=>x.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedSlot = sl;
+  // Peupler le select classe
+  const sc = $('adm-sel-classe');
+  sc.innerHTML = '<option value="">— Choisir une classe —</option>';
+  state.classes.filter(c=>(c.children||[]).length>0).forEach(c =>
+    sc.innerHTML += `<option value="${c.id}">${c.name} (${c.children.length} élèves)</option>`);
+  $('adm-sel-classe').value = '';
+  $('adm-step-classe').style.display='flex';
+  $('adm-step-enfants').style.display='none';
+  $('adm-step-submit').style.display='none';
+};
+
+window.admOnClasseChange = () => {
+  const cid = $('adm-sel-classe').value;
+  if (!cid) { $('adm-step-enfants').style.display='none'; $('adm-step-submit').style.display='none'; return; }
+  const cls = getClass(cid);
+  const sid = $('adm-sel-stand').value;
+  const s   = state.stands.find(x=>x.id===sid);
+  const left = selectedSlot ? slotLeft(s, selectedSlot) : 0;
+
+  // Enfants déjà inscrits sur ce créneau (pour ce stand)
+  const alreadyOnSlot = new Set(
+    state.inscriptions.filter(i=>i.standId===sid&&i.slotTime===selectedSlot&&i.classId===cid).map(i=>i.childName)
+  );
+
+  $('adm-children-grid').innerHTML = (cls.children||[]).map(ch => {
+    const isRegistered = alreadyOnSlot.has(ch);
+    return `<label class="child-check${isRegistered?' disabled-check':''}" style="${isRegistered?'opacity:0.45;cursor:not-allowed':''}">
+      <input type="checkbox" value="${ch}" ${isRegistered?'disabled checked':''} />
+      ${ch}${isRegistered?' <em style="font-size:0.75rem;color:var(--accent2)">(déjà inscrit)</em>':''}
+    </label>`;
+  }).join('');
+
+  $('adm-step-enfants').style.display='flex';
+  $('adm-step-submit').style.display='block';
+};
+
+window.submitAdminInscription = () => {
+  const sid = $('adm-sel-stand').value;
+  const cid = $('adm-sel-classe').value;
+  if (!sid)         return toast('Choisissez un stand','error');
+  if (!selectedSlot) return toast('Choisissez un créneau','error');
+  if (!cid)         return toast('Choisissez une classe','error');
+
+  const s = state.stands.find(x=>x.id===sid);
+  const checked = [...document.querySelectorAll('#adm-children-grid input[type=checkbox]:checked:not(:disabled)')].map(cb=>cb.value);
+  if (!checked.length) return toast('Cochez au moins un enfant','error');
+
+  // Vérifier qu'il reste assez de places
+  const left = slotLeft(s, selectedSlot);
+  if (checked.length > left) return toast(`Seulement ${left} place(s) disponible(s) sur ce créneau (${checked.length} sélectionné(s))`, 'error');
+
+  checked.forEach(childName => {
+    state.inscriptions.push({ id:genId(), childName, classId:cid, standId:sid, slotTime:selectedSlot, createdAt:Date.now() });
+  });
+
+  saveData();
+  toast(`✅ ${checked.length} inscription(s) enregistrée(s) !`);
+
+  // Remettre à zéro le formulaire admin
+  renderAdminInscriptionForm();
+  selectedSlot = null;
+  renderRecentInscriptions();
+};
+
+// ═══════════════════════════════════════════════════
+//  FLUX PARENT — VALIDATION + MODALES
+// ═══════════════════════════════════════════════════
 // Données temporaires en attente de confirmation bénévolat
 let _pendingInscription = null;
 
