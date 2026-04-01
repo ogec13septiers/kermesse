@@ -490,6 +490,10 @@
         <label>Places/créneau</label>
         <input type="number" id="new-stand-cap" placeholder="2" min="1" max="20" value="2" />
       </div>
+      <div class="form-group" style="flex:1;min-width:150px">
+        <label>Responsable</label>
+        <input type="text" id="new-stand-manager" placeholder="Prénom NOM" />
+      </div>
       <button class="btn btn-primary" onclick="addStand()" style="align-self:flex-end">➕ Ajouter</button>
     </div>
   </div>
@@ -1697,6 +1701,11 @@ function renderParametres() {
           <input type="number" value="${st.cap}" min="1" max="30"
             onchange="updateStand('${st.id}','cap',parseInt(this.value)||1)" />
         </div>
+        <div class="stand-admin-meta">
+          <label>👤 Responsable :</label>
+          <input type="text" value="${st.manager||''}" placeholder="Prénom NOM" style="flex:1;min-width:120px"
+            onchange="updateStand('${st.id}','manager',this.value.trim())" />
+        </div>
         <div style="font-size:0.82rem;font-weight:700;color:var(--text-light);margin-bottom:0.5rem">⏰ Créneaux :</div>
         <div class="slots-admin-list" id="slots-list-${st.id}">
           ${st.slots.map((sl, sIdx) => `
@@ -1748,16 +1757,18 @@ window.removeSlot = (standId, slotIdx) => {
 };
 
 window.addStand = () => {
-  const name = $('new-stand-name').value.trim();
-  const emoji = $('new-stand-emoji').value.trim() || '🎯';
-  const cap = parseInt($('new-stand-cap').value) || 2;
+  const name    = $('new-stand-name').value.trim();
+  const emoji   = $('new-stand-emoji').value.trim() || '🎯';
+  const cap     = parseInt($('new-stand-cap').value) || 2;
+  const manager = $('new-stand-manager').value.trim();
   if (!name) return toast('Entrez un nom de stand','error');
   const id = name.toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,12) + genId().slice(0,4);
-  state.stands.push({ id, name, emoji, cap, slots:['11h30/12h30','Fin spectacle/17h00','17h00/18h00'] });
+  state.stands.push({ id, name, emoji, cap, manager: manager||undefined, slots:['11h30/12h30','Fin spectacle/17h00','17h00/18h00'] });
   saveData();
-  $('new-stand-name').value = '';
-  $('new-stand-emoji').value = '';
-  $('new-stand-cap').value = '2';
+  $('new-stand-name').value    = '';
+  $('new-stand-emoji').value   = '';
+  $('new-stand-cap').value     = '2';
+  $('new-stand-manager').value = '';
   renderParametres();
   toast(`Stand "${name}" ajouté ✅`);
 };
