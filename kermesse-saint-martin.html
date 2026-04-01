@@ -1396,10 +1396,12 @@ window.confirmBenevolat = (save) => {
   renderRecentInscriptions();
   renderInscriptionSelects();
 
-  // Proposer la réservation repas si un lien HelloAsso est configuré
+  // Proposer la réservation repas si un lien HelloAsso est configuré, puis rediriger vers le planning
   const helloasso = (state.settings.helloassoUrl || '').trim();
   if (helloasso) {
     $('repas-modal').classList.add('open');
+  } else {
+    showPage('planning');
   }
 };
 
@@ -1812,10 +1814,12 @@ window.openHelloAsso = () => {
   const url = (state.settings.helloassoUrl || '').trim();
   if (url) window.open(url, '_blank', 'noopener');
   $('repas-modal').classList.remove('open');
+  showPage('planning');
 };
 
 window.closeRepasModal = () => {
   $('repas-modal').classList.remove('open');
+  showPage('planning');
 };
 
 // Fermer sur clic backdrop
