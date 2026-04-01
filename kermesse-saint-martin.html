@@ -394,6 +394,7 @@
     <span style="font-size:1.8rem">📋</span>
     <h2>Planning récapitulatif</h2>
     <button id="btn-export-pdf" class="btn btn-secondary admin-only" onclick="exportPlanning()" style="margin-left:auto;display:none">📊 Exporter en Excel</button>
+    <button id="btn-inscrire-planning" class="btn btn-primary non-admin-only" onclick="goToInscription()" style="margin-left:auto;display:none">✍️ M'inscrire sur un créneau</button>
   </div>
   <div class="stats-row"    id="stats-row"></div>
   <div class="planning-grid" id="planning-grid"></div>
@@ -624,7 +625,10 @@ function slotCap(s, slot) {
 }
 function slotUsed(sId, slot) { return state.inscriptions.filter(i => i.standId===sId && i.slotTime===slot).length; }
 function slotLeft(s, slot)   { return slotCap(s, slot) - slotUsed(s.id, slot); }
-function slotNames(sId, slot){ return state.inscriptions.filter(i => i.standId===sId && i.slotTime===slot).map(i=>i.childName); }
+function slotNames(sId, slot){ return state.inscriptions.filter(i => i.standId===sId && i.slotTime===slot).map(i => {
+  const cls = state.classes.find(c=>c.id===i.classId);
+  return { childName: i.childName, className: cls ? cls.name : '', parentName: i.parentName||'', forced: !!i.forced };
+}); }
 
 function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
 
@@ -801,11 +805,13 @@ function applyAdminUI() {
     txt.textContent = '🔑 Admin actif';
     adminBtns.forEach(b => b.classList.add('visible'));
     $('btn-export-pdf').style.display = 'inline-flex';
+    $('btn-inscrire-planning').style.display = 'none';
   } else {
     badge.classList.remove('active');
     txt.textContent = 'Mode admin';
     adminBtns.forEach(b => b.classList.remove('visible'));
     $('btn-export-pdf').style.display = 'none';
+    $('btn-inscrire-planning').style.display = 'inline-flex';
     // Redirect to planning if on admin-only page
     if (activePage && ['page-classes','page-nonassignes','page-parametres','page-benevolat','page-reglages'].includes(activePage.id)) {
       showPage('planning');
@@ -820,6 +826,8 @@ function applyAdminUI() {
 
 // Close modal on backdrop click
 $('admin-modal').addEventListener('click', e => { if(e.target === $('admin-modal')) closeAdminModal(); });
+
+window.goToInscription = () => { showPage('inscription'); };
 
 // ── INIT ────────────────────────────────────────────────────
 async function init() {
@@ -898,7 +906,10 @@ function renderPlanning() {
           return `<div class="slot ${cls}">
             <div class="slot-time">${sl}</div>
             <div class="slot-count">${used}/${cap} ${badge}</div>
-            ${names.length?`<div class="slot-names">${names.map(n=>`• ${n}`).join('<br>')}</div>`:''}
+            ${names.length?`<div class="slot-names">${names.map(n => {
+              const label = `${n.childName} - ${n.className}${n.parentName ? ' ('+n.parentName+')' : ''}`;
+              return `• ${n.forced ? `<em>${label}</em>` : label}`;
+            }).join('<br>')}</div>`:''}
           </div>`;
         }).join('')}
       </div>
@@ -1056,14 +1067,18 @@ function renderParentInscriptionForm() {
         <option value="">— Choisir un enfant —</option>
       </select>
     </div>
+    <div class="form-group" id="step-parent" style="display:none">
+      <label>👤 Étape 3 — Votre nom (parent)</label>
+      <input type="text" id="inp-parent" placeholder="Prénom NOM" oninput="onParentNameInput()" style="width:100%;padding:0.55rem 0.8rem;border:1.5px solid #d1d5db;border-radius:10px;font-size:1rem;outline:none;" />
+    </div>
     <div class="form-group" id="step-stand" style="display:none">
-      <label>🎡 Étape 3 — Choix du stand</label>
+      <label>🎡 Étape 4 — Choix du stand</label>
       <select id="sel-stand" onchange="onStandChange()">
         <option value="">— Choisir un stand —</option>
       </select>
     </div>
     <div class="form-group" id="step-creneau" style="display:none">
-      <label>⏰ Étape 4 — Choix du créneau</label>
+      <label>⏰ Étape 5 — Choix du créneau</label>
       <div class="slots-container" id="slots-container"></div>
     </div>
     <div id="step-submit" style="display:none">
@@ -1082,6 +1097,7 @@ window.onClasseChange = () => {
   const banner = $('restriction-banner');
   if (!cid) {
     $('step-enfant').style.display='none';
+    $('step-parent').style.display='none';
     $('step-stand').style.display='none';
     banner.style.display='none';
     return;
@@ -1092,6 +1108,7 @@ window.onClasseChange = () => {
   (cls.children||[]).forEach(ch => selEnfant.innerHTML += `<option value="${ch}">${ch}</option>`);
   selEnfant.value = '';
   $('step-enfant').style.display='flex';
+  $('step-parent').style.display='none';
   $('step-stand').style.display='none';
   $('step-creneau').style.display='none';
   $('step-submit').style.display='none';
@@ -1106,7 +1123,31 @@ window.onClasseChange = () => {
 window.onEnfantChange = () => {
   const cid = $('sel-classe').value;
   const enfant = $('sel-enfant').value;
-  if (!enfant) { $('step-stand').style.display='none'; $('step-creneau').style.display='none'; $('step-submit').style.display='none'; return; }
+  if (!enfant) {
+    $('step-parent').style.display='none';
+    $('step-stand').style.display='none';
+    $('step-creneau').style.display='none';
+    $('step-submit').style.display='none';
+    return;
+  }
+  // Afficher l'étape nom du parent, masquer les suivantes en attendant
+  const inp = $('inp-parent');
+  if (inp) inp.value = '';
+  $('step-parent').style.display='flex';
+  $('step-stand').style.display='none';
+  $('step-creneau').style.display='none';
+  $('step-submit').style.display='none';
+};
+
+window.onParentNameInput = () => {
+  const cid = $('sel-classe').value;
+  const val = ($('inp-parent').value || '').trim();
+  if (!val) {
+    $('step-stand').style.display='none';
+    $('step-creneau').style.display='none';
+    $('step-submit').style.display='none';
+    return;
+  }
   const creneauxDejaAffichés = refreshStandSelect(cid);
   $('step-stand').style.display='flex';
   if (!creneauxDejaAffichés) { $('step-creneau').style.display='none'; $('step-submit').style.display='none'; }
@@ -1278,6 +1319,7 @@ window.submitAdminInscription = () => {
       classId: cb.dataset.classid,
       standId: sid,
       slotTime: selectedSlot,
+      forced: true,
       createdAt: Date.now()
     });
   });
@@ -1297,11 +1339,13 @@ window.submitAdminInscription = () => {
 let _pendingInscription = null;
 
 window.submitInscription = () => {
-  const cid       = $('sel-classe').value;
-  const sid       = $('sel-stand').value;
-  const childName = $('sel-enfant').value;
+  const cid        = $('sel-classe').value;
+  const sid        = $('sel-stand').value;
+  const childName  = $('sel-enfant').value;
+  const parentName = ($('inp-parent') ? $('inp-parent').value : '').trim();
   if (!cid)       return toast('Choisissez une classe','error');
   if (!childName) return toast('Choisissez un enfant','error');
+  if (!parentName) return toast('Saisissez le nom du parent','error');
   if (!sid)       return toast('Choisissez un stand','error');
   if (!selectedSlot) return toast('Choisissez un créneau','error');
   const s = state.stands.find(x=>x.id===sid);
@@ -1309,7 +1353,7 @@ window.submitInscription = () => {
   if (left < 1) return toast('Plus de place disponible sur ce créneau','error');
 
   // Stocker l'inscription en attente et ouvrir la modale bénévolat
-  _pendingInscription = { cid, sid, childName, slot: selectedSlot };
+  _pendingInscription = { cid, sid, childName, parentName, slot: selectedSlot };
   $('benv-installation').checked = false;
   $('benv-rangement').checked    = false;
   $('benevolat-modal').classList.add('open');
@@ -1318,13 +1362,15 @@ window.submitInscription = () => {
 window.confirmBenevolat = (save) => {
   $('benevolat-modal').classList.remove('open');
   if (!_pendingInscription) return;
-  const { cid, sid, childName, slot } = _pendingInscription;
+  const { cid, sid, childName, parentName, slot } = _pendingInscription;
   _pendingInscription = null;
 
   // Enregistrer l'inscription
   state.inscriptions.push({
     id: genId(),
-    childName, classId:cid, standId:sid, slotTime:slot, createdAt:Date.now()
+    childName, classId:cid, standId:sid, slotTime:slot,
+    parentName: parentName || undefined,
+    createdAt:Date.now()
   });
 
   // Enregistrer le bénévolat
@@ -1344,7 +1390,7 @@ window.confirmBenevolat = (save) => {
   $('sel-classe').value='';
   $('sel-enfant').value='';
   $('restriction-banner').style.display='none';
-  ['step-enfant','step-stand','step-creneau','step-submit'].forEach(id=>$(id).style.display='none');
+  ['step-enfant','step-parent','step-stand','step-creneau','step-submit'].forEach(id=>$(id).style.display='none');
   selectedSlot = null;
   renderRecentInscriptions();
   renderInscriptionSelects();
