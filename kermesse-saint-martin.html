@@ -1438,7 +1438,7 @@ function renderCancelSelect() {
   const sel = $('cancel-sel-inscription');
   if (!sel) return;
   sel.innerHTML = '<option value="">— Choisir une inscription —</option>';
-  [...state.inscriptions].sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).forEach(ins => {
+  [...state.inscriptions].filter(ins => !ins.forced).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).forEach(ins => {
     const cls = getClass(ins.classId);
     const st  = state.stands.find(x=>x.id===ins.standId);
     const opt = document.createElement('option');
