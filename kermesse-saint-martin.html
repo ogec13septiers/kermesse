@@ -1607,7 +1607,10 @@ function importExcel(event) {
           cls = { id: name.toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,12) + genId().slice(0,4), name, children: [] };
           state.classes.push(cls);
         }
-        children.forEach(ch => { if (!cls.children.includes(ch)) cls.children.push(ch); });
+        children.forEach(ch => {
+          if (!cls.children) cls.children = [];
+          if (!cls.children.includes(ch)) cls.children.push(ch);
+        });
       });
       state.classes.sort((a,b) => {
         const ai = CLASSES_ORDER.indexOf(a.name), bi = CLASSES_ORDER.indexOf(b.name);
