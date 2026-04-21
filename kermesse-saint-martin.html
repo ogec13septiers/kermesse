@@ -1583,7 +1583,7 @@ function importExcel(event) {
       const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
       // Détecter si la première ligne est un en-tête
       const firstRow = rows[0] || [];
-      const hasHeader = firstRow.some(c => typeof c === 'string' && /classe|élève|eleve|nom/i.test(c));
+      const hasHeader = firstRow.some(c => typeof c === 'string' && /classe|[eé]l[eè]ve|eleve|nom/i.test(c));
       const dataRows = hasHeader ? rows.slice(1) : rows;
 
       // Construire un map { nomClasse -> Set<élèves> }
