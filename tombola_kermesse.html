@@ -1,0 +1,988 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tombola Kermesse 2026 - Saisie des ventes</title>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #f0f4f8;
+      color: #1e293b;
+      min-height: 100vh;
+    }
+
+    header {
+      background: linear-gradient(135deg, #1e40af, #3b82f6);
+      color: white;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    header h1 { font-size: 1.4rem; font-weight: 700; }
+    header span { font-size: 0.85rem; opacity: 0.85; }
+
+    nav {
+      display: flex;
+      background: white;
+      border-bottom: 2px solid #e2e8f0;
+      padding: 0 24px;
+    }
+    nav button {
+      padding: 12px 20px;
+      border: none;
+      background: none;
+      font-size: 0.95rem;
+      cursor: pointer;
+      color: #64748b;
+      border-bottom: 3px solid transparent;
+      margin-bottom: -2px;
+      transition: all 0.15s;
+    }
+    nav button.active {
+      color: #1e40af;
+      border-bottom-color: #1e40af;
+      font-weight: 600;
+    }
+    nav button:hover:not(.active) { color: #334155; background: #f8fafc; }
+
+    .page { display: none; padding: 24px; max-width: 900px; margin: 0 auto; }
+    .page.active { display: block; }
+
+    /* --- CARDS --- */
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      margin-bottom: 20px;
+    }
+    .card h2 { font-size: 1.1rem; margin-bottom: 16px; color: #1e40af; }
+
+    /* --- BOUTONS --- */
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 10px 20px; border-radius: 8px; border: none;
+      font-size: 0.9rem; font-weight: 600; cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-primary { background: #1e40af; color: white; }
+    .btn-primary:hover { background: #1d3a9e; }
+    .btn-success { background: #16a34a; color: white; }
+    .btn-success:hover { background: #15803d; }
+    .btn-outline {
+      background: white; color: #1e40af;
+      border: 2px solid #1e40af;
+    }
+    .btn-outline:hover { background: #eff6ff; }
+    .btn-danger { background: #dc2626; color: white; }
+    .btn-danger:hover { background: #b91c1c; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* --- IMPORT --- */
+    .drop-zone {
+      border: 2px dashed #93c5fd;
+      border-radius: 10px;
+      padding: 40px;
+      text-align: center;
+      cursor: pointer;
+      transition: background 0.15s;
+      color: #64748b;
+    }
+    .drop-zone:hover, .drop-zone.dragover { background: #eff6ff; border-color: #3b82f6; }
+    .drop-zone .icon { font-size: 2.5rem; margin-bottom: 8px; }
+
+    /* --- FORMULAIRE VENTE --- */
+    .form-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+    .form-group { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 180px; }
+    .form-group label { font-size: 0.82rem; font-weight: 600; color: #475569; text-transform: uppercase; letter-spacing: 0.04em; }
+    .form-group input, .form-group select {
+      padding: 10px 12px; border: 1.5px solid #cbd5e1; border-radius: 8px;
+      font-size: 1rem; transition: border-color 0.15s;
+    }
+    .form-group input:focus, .form-group select:focus {
+      outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+    }
+
+    /* --- FILTRE ÉLÈVES --- */
+    #search-wrapper { position: relative; }
+    #search-input {
+      width: 100%; padding: 12px 14px; border: 1.5px solid #cbd5e1;
+      border-radius: 8px; font-size: 1rem;
+    }
+    #search-input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.15); }
+    #suggestions {
+      position: absolute; top: 100%; left: 0; right: 0;
+      background: white; border: 1.5px solid #cbd5e1; border-top: none;
+      border-radius: 0 0 8px 8px; max-height: 240px; overflow-y: auto;
+      z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .suggestion-item {
+      padding: 10px 14px; cursor: pointer; display: flex;
+      justify-content: space-between; align-items: center;
+      border-bottom: 1px solid #f1f5f9;
+    }
+    .suggestion-item:hover { background: #eff6ff; }
+    .suggestion-item .classe { font-size: 0.8rem; color: #94a3b8; }
+    .suggestion-item .already-sold { font-size: 0.78rem; color: #f59e0b; font-weight: 600; }
+
+    /* --- MONTANT --- */
+    .montant-box {
+      background: linear-gradient(135deg, #1e40af, #3b82f6);
+      color: white; border-radius: 12px; padding: 20px 24px;
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 16px;
+    }
+    .montant-box .label { font-size: 0.9rem; opacity: 0.85; }
+    .montant-box .value { font-size: 2rem; font-weight: 700; }
+
+    /* --- TABLEAU --- */
+    .table-wrapper { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    th {
+      background: #f1f5f9; padding: 10px 12px; text-align: left;
+      font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0;
+    }
+    td { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; }
+    tr:hover td { background: #f8fafc; }
+    .badge {
+      display: inline-block; padding: 2px 8px; border-radius: 99px;
+      font-size: 0.78rem; font-weight: 600;
+    }
+    .badge-cheque { background: #dbeafe; color: #1d4ed8; }
+    .badge-espece { background: #dcfce7; color: #15803d; }
+    .badge-mixte { background: #fef3c7; color: #92400e; }
+
+    /* --- PAIEMENT MIXTE --- */
+    .paiement-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+      background: #f8fafc; border: 1.5px solid #e2e8f0;
+      border-radius: 10px; padding: 14px; margin-bottom: 16px;
+    }
+    .paiement-grid .pg-title {
+      grid-column: 1 / -1; font-size: 0.82rem; font-weight: 600;
+      color: #475569; text-transform: uppercase; letter-spacing: 0.04em;
+      margin-bottom: 2px;
+    }
+    .paiement-field { display: flex; flex-direction: column; gap: 4px; }
+    .paiement-field label { font-size: 0.82rem; color: #64748b; font-weight: 600; }
+    .paiement-field input {
+      padding: 9px 12px; border: 1.5px solid #cbd5e1; border-radius: 8px;
+      font-size: 1rem; transition: border-color 0.15s;
+    }
+    .paiement-field input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.15); }
+    .paiement-field input.error { border-color: #dc2626; }
+    .paiement-restant {
+      grid-column: 1 / -1; font-size: 0.88rem; color: #64748b;
+      display: flex; justify-content: space-between; align-items: center;
+      padding-top: 6px; border-top: 1px solid #e2e8f0; margin-top: 4px;
+    }
+    .paiement-restant .reste-ok { color: #16a34a; font-weight: 700; }
+    .paiement-restant .reste-err { color: #dc2626; font-weight: 700; }
+
+    /* --- BOUTON SUPPRIMER --- */
+    .btn-delete {
+      background: none; border: none; cursor: pointer; color: #cbd5e1;
+      font-size: 1rem; padding: 4px 6px; border-radius: 6px; transition: all 0.15s;
+    }
+    .btn-delete:hover { color: #dc2626; background: #fee2e2; }
+
+    /* --- BARRE PROGRESSION --- */
+    .progress-card {
+      background: white; border-radius: 10px; padding: 18px 20px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08); margin-bottom: 20px;
+    }
+    .progress-card .progress-header {
+      display: flex; justify-content: space-between; align-items: baseline;
+      margin-bottom: 10px;
+    }
+    .progress-card .progress-title { font-weight: 700; color: #1e293b; font-size: 1rem; }
+    .progress-card .progress-pct { font-size: 1.6rem; font-weight: 800; color: #1e40af; }
+    .progress-bar-bg {
+      background: #e2e8f0; border-radius: 99px; height: 14px; overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%; border-radius: 99px;
+      background: linear-gradient(90deg, #1e40af, #3b82f6);
+      transition: width 0.6s ease;
+    }
+    .progress-legend {
+      display: flex; justify-content: space-between;
+      font-size: 0.8rem; color: #64748b; margin-top: 6px;
+    }
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-bottom: 20px; }
+    .stat-card {
+      background: white; border-radius: 10px; padding: 18px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08); text-align: center;
+    }
+    .stat-card .num { font-size: 2rem; font-weight: 700; color: #1e40af; }
+    .stat-card .lbl { font-size: 0.82rem; color: #64748b; margin-top: 4px; }
+
+    /* --- MESSAGES --- */
+    .alert {
+      padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 0.9rem;
+    }
+    .alert-success { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
+    .alert-error { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+    .alert-info { background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; }
+
+    #toast {
+      position: fixed; bottom: 24px; right: 24px;
+      background: #1e293b; color: white; padding: 12px 20px;
+      border-radius: 10px; font-size: 0.9rem; box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+      transform: translateY(80px); opacity: 0; transition: all 0.3s;
+      z-index: 9999;
+    }
+    #toast.show { transform: translateY(0); opacity: 1; }
+
+    .selected-eleve {
+      background: #eff6ff; border: 1.5px solid #3b82f6;
+      border-radius: 8px; padding: 10px 14px;
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 12px;
+    }
+    .selected-eleve .name { font-weight: 600; }
+    .selected-eleve .classe { color: #64748b; font-size: 0.85rem; }
+    .selected-eleve button { background: none; border: none; cursor: pointer; color: #94a3b8; font-size: 1.1rem; }
+    .selected-eleve button:hover { color: #dc2626; }
+
+    .btn-group { display: flex; gap: 10px; flex-wrap: wrap; }
+
+    .loader {
+      display: inline-block; width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,0.4);
+      border-top-color: white; border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🎟 Tombola Kermesse 2026</h1>
+  <span id="sync-status">Connexion...</span>
+</header>
+
+<nav>
+  <button class="active" onclick="showPage('saisie')">Saisie vente</button>
+  <button onclick="showPage('historique')">Historique</button>
+  <button onclick="showPage('stats')">Statistiques</button>
+  <button onclick="showPage('import')">Import élèves</button>
+</nav>
+
+<div id="page-saisie" class="page active">
+  <div class="card">
+    <h2>Nouvelle vente</h2>
+    <div id="saisie-alert"></div>
+
+    <div class="form-group" style="margin-bottom:12px;">
+      <label>Rechercher un élève</label>
+      <div id="search-wrapper">
+        <input type="text" id="search-input" placeholder="Nom, prénom ou classe..." autocomplete="off" />
+        <div id="suggestions" style="display:none;"></div>
+      </div>
+    </div>
+
+    <div id="selected-eleve-box" style="display:none;"></div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Nombre de tickets</label>
+        <input type="number" id="nb-tickets" value="10" min="0" max="500" />
+      </div>
+    </div>
+
+    <div class="montant-box">
+      <div>
+        <div class="label">Montant à encaisser</div>
+        <div class="label" id="montant-detail" style="font-size:0.8rem; margin-top:2px;"></div>
+      </div>
+      <div class="value" id="montant-display">20,00 €</div>
+    </div>
+
+    <div class="paiement-grid">
+      <div class="pg-title">Répartition du paiement</div>
+      <div class="paiement-field">
+        <label>💵 Espèces (€)</label>
+        <input type="number" id="montant-espece" value="0" min="0" step="0.01" placeholder="0,00" />
+      </div>
+      <div class="paiement-field">
+        <label>🏦 Chèque (€)</label>
+        <input type="number" id="montant-cheque" value="0" min="0" step="0.01" placeholder="0,00" />
+      </div>
+      <div class="paiement-restant">
+        <span>Restant à ventiler :</span>
+        <span id="paiement-reste">—</span>
+      </div>
+    </div>
+
+    <button class="btn btn-success" id="btn-valider" onclick="validerVente()" disabled>
+      ✓ Valider la vente
+    </button>
+  </div>
+</div>
+
+<div id="page-historique" class="page">
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+      <h2 style="margin:0;">Historique des ventes</h2>
+      <div class="btn-group">
+        <button class="btn btn-outline" onclick="exporterCSV()">⬇ Exporter CSV</button>
+        <button class="btn btn-outline" onclick="chargerHistorique()">↺ Actualiser</button>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; margin-bottom:16px; background:#f8fafc; border:1.5px solid #e2e8f0; border-radius:10px; padding:14px;">
+      <div class="form-group" style="flex:0 0 auto; min-width:160px;">
+        <label>Filtrer par date</label>
+        <input type="date" id="filtre-date" oninput="filtrerHistorique()" />
+      </div>
+      <button class="btn btn-outline" onclick="document.getElementById('filtre-date').value=''; filtrerHistorique();" style="height:42px;">✕ Effacer</button>
+      <div id="recap-date" style="flex:1; display:none; background:white; border-radius:8px; padding:10px 14px; border:1px solid #e2e8f0;">
+        <div style="font-size:0.82rem; font-weight:600; color:#475569; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.04em;">Récapitulatif du <span id="recap-date-label"></span></div>
+        <div style="display:flex; gap:20px; flex-wrap:wrap;">
+          <span>💵 Espèces : <strong id="recap-espece" style="color:#16a34a;">—</strong></span>
+          <span>🏦 Chèque : <strong id="recap-cheque" style="color:#1d4ed8;">—</strong></span>
+          <span>Total : <strong id="recap-total" style="color:#1e40af;">—</strong></span>
+          <span style="color:#64748b; font-size:0.85rem;"><span id="recap-nb-ventes"></span> vente(s) · <span id="recap-nb-tickets"></span> ticket(s)</span>
+        </div>
+      </div>
+    </div>
+    <div class="table-wrapper">
+      <table id="table-historique">
+        <thead>
+          <tr>
+            <th>Date/Heure</th>
+            <th>Élève</th>
+            <th>Classe</th>
+            <th>Tickets</th>
+            <th>Espèces</th>
+            <th>Chèque</th>
+            <th>Montant</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tbody-historique">
+          <tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:30px;">Chargement...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div id="page-stats" class="page">
+  <div id="participation-card" class="progress-card" style="display:none;">
+    <div class="progress-header">
+      <span class="progress-title">Taux de participation</span>
+      <span class="progress-pct" id="participation-pct">—</span>
+    </div>
+    <div class="progress-bar-bg">
+      <div class="progress-bar-fill" id="participation-bar" style="width:0%"></div>
+    </div>
+    <div class="progress-legend">
+      <span id="participation-detail">—</span>
+      <span id="participation-restant">—</span>
+    </div>
+  </div>
+  <div id="stats-grid" class="stats-grid"></div>
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+      <h2 style="margin:0;">Récapitulatif par élève</h2>
+      <button class="btn btn-outline" onclick="chargerStats()">↺ Actualiser</button>
+    </div>
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>Élève</th>
+            <th>Classe</th>
+            <th>Tickets vendus</th>
+            <th>Montant total</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-stats">
+          <tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:30px;">Chargement...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div id="page-import" class="page">
+  <div class="card">
+    <h2>Importer la liste des élèves</h2>
+    <div class="alert alert-info" style="margin-bottom:16px;">
+      Le fichier Excel doit contenir les colonnes : <strong>Nom</strong>, <strong>Prénom</strong>, <strong>Classe</strong> (la 1ère ligne est considérée comme en-tête).
+    </div>
+    <div id="import-alert"></div>
+    <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+      <div class="icon">📂</div>
+      <p><strong>Cliquez ou glissez</strong> votre fichier Excel ici</p>
+      <p style="font-size:0.82rem; margin-top:6px; color:#94a3b8;">.xlsx, .xls acceptés</p>
+    </div>
+    <input type="file" id="file-input" accept=".xlsx,.xls" style="display:none;" onchange="handleFileSelect(event)" />
+    <div id="import-preview" style="margin-top:20px; display:none;">
+      <h2>Aperçu (<span id="preview-count">0</span> élèves)</h2>
+      <div class="table-wrapper" style="max-height:300px; overflow-y:auto; margin-top:12px;">
+        <table>
+          <thead><tr><th>#</th><th>Nom</th><th>Prénom</th><th>Classe</th></tr></thead>
+          <tbody id="tbody-preview"></tbody>
+        </table>
+      </div>
+      <div style="margin-top:16px;" class="btn-group">
+        <button class="btn btn-primary" id="btn-import" onclick="importerEleves()">
+          ⬆ Importer dans Firestore
+        </button>
+        <button class="btn btn-outline" onclick="annulerImport()">Annuler</button>
+      </div>
+    </div>
+
+    <div style="margin-top:24px; border-top:1px solid #e2e8f0; padding-top:20px;">
+      <h2>Élèves actuellement en base</h2>
+      <p id="nb-eleves-db" style="color:#64748b; margin-bottom:12px;"></p>
+      <button class="btn btn-danger" onclick="supprimerTousEleves()" style="font-size:0.85rem;">
+        🗑 Supprimer tous les élèves
+      </button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<!-- Firebase SDK -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import {
+    getFirestore, collection, addDoc, getDocs, deleteDoc, doc,
+    query, orderBy, serverTimestamp, writeBatch, updateDoc
+  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyCj0xAlVsmx3f0S2juVRP4rma0hqfYoJOg",
+    authDomain: "kermesse-ogec-2026.firebaseapp.com",
+    databaseURL: "https://kermesse-ogec-2026-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "kermesse-ogec-2026",
+    storageBucket: "kermesse-ogec-2026.firebasestorage.app",
+    messagingSenderId: "96483794474",
+    appId: "1:96483794474:web:805b0ba4ea801120fb2d53"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  // --- État global ---
+  let elevesCache = [];
+  let selectedEleve = null;
+  let importData = [];
+  const PRIX_TICKET = 2;
+
+  // --- Connexion ---
+  document.getElementById('sync-status').textContent = '✓ Connecté';
+
+  // --- Navigation ---
+  window.showPage = function(page) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+    document.getElementById('page-' + page).classList.add('active');
+    event.target.classList.add('active');
+    if (page === 'historique') chargerHistorique();
+    if (page === 'stats') chargerStats();
+    if (page === 'import') chargerNbEleves();
+  };
+
+  // --- Toast ---
+  window.showToast = function(msg, duration = 3000) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), duration);
+  };
+
+  // ===================== ÉLÈVES =====================
+
+  async function chargerEleves() {
+    const snap = await getDocs(collection(db, 'eleves'));
+    elevesCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    elevesCache.sort((a, b) => (a.nom + a.prenom).localeCompare(b.nom + b.prenom));
+  }
+  chargerEleves();
+
+  // --- Recherche / suggestions ---
+  const searchInput = document.getElementById('search-input');
+  const suggestionsBox = document.getElementById('suggestions');
+
+  searchInput.addEventListener('input', () => {
+    const q = searchInput.value.trim().toLowerCase();
+    if (!q) { suggestionsBox.style.display = 'none'; return; }
+    const results = elevesCache.filter(e =>
+      !e.repondu &&
+      (e.nom.toLowerCase().includes(q) ||
+      e.prenom.toLowerCase().includes(q) ||
+      (e.classe || '').toLowerCase().includes(q))
+    ).slice(0, 10);
+
+    if (!results.length) { suggestionsBox.style.display = 'none'; return; }
+
+    suggestionsBox.innerHTML = results.map(e => `
+      <div class="suggestion-item" onclick="selectEleve('${e.id}')">
+        <div>
+          <span style="font-weight:600;">${e.nom} ${e.prenom}</span>
+          <span class="classe"> — ${e.classe || 'N/A'}</span>
+        </div>
+        ${e.ticketsVendus ? `<span class="already-sold">⚠ ${e.ticketsVendus} ticket(s) déjà vendus</span>` : ''}
+      </div>
+    `).join('');
+    suggestionsBox.style.display = 'block';
+  });
+
+  document.addEventListener('click', e => {
+    if (!document.getElementById('search-wrapper').contains(e.target)) {
+      suggestionsBox.style.display = 'none';
+    }
+  });
+
+  window.selectEleve = function(id) {
+    selectedEleve = elevesCache.find(e => e.id === id);
+    suggestionsBox.style.display = 'none';
+    searchInput.value = '';
+    const box = document.getElementById('selected-eleve-box');
+    box.style.display = 'block';
+    box.innerHTML = `
+      <div class="selected-eleve">
+        <div>
+          <div class="name">${selectedEleve.nom} ${selectedEleve.prenom}</div>
+          <div class="classe">${selectedEleve.classe || 'Classe non renseignée'}
+            ${selectedEleve.ticketsVendus ? ` · <span style="color:#f59e0b;">⚠ ${selectedEleve.ticketsVendus} ticket(s) vendus précédemment</span>` : ''}
+          </div>
+        </div>
+        <button onclick="clearEleve()" title="Désélectionner">✕</button>
+      </div>
+    `;
+    document.getElementById('btn-valider').disabled = false;
+    updateMontant();
+  };
+
+  window.clearEleve = function() {
+    selectedEleve = null;
+    document.getElementById('selected-eleve-box').style.display = 'none';
+    document.getElementById('btn-valider').disabled = true;
+  };
+
+  // --- Calcul montant & ventilation paiement ---
+  function updateMontant() {
+    const nb = parseInt(document.getElementById('nb-tickets').value) || 0;
+    const montant = nb * PRIX_TICKET;
+    document.getElementById('montant-display').textContent = montant.toFixed(2).replace('.', ',') + ' €';
+    document.getElementById('montant-detail').textContent = `${nb} ticket(s) × ${PRIX_TICKET} €`;
+    // Pré-remplir espèces avec le montant total, chèque à 0
+    document.getElementById('montant-espece').value = montant.toFixed(2);
+    document.getElementById('montant-cheque').value = '0';
+    updateReste();
+  }
+
+  function updateReste() {
+    const nb = parseInt(document.getElementById('nb-tickets').value) || 0;
+    const total = nb * PRIX_TICKET;
+    const espece = parseFloat(document.getElementById('montant-espece').value) || 0;
+    const cheque = parseFloat(document.getElementById('montant-cheque').value) || 0;
+    const reste = total - espece - cheque;
+    const resteEl = document.getElementById('paiement-reste');
+    if (Math.abs(reste) < 0.001) {
+      resteEl.innerHTML = `<span class="reste-ok">✓ Soldé</span>`;
+    } else if (reste > 0) {
+      resteEl.innerHTML = `<span class="reste-err">−${reste.toFixed(2).replace('.', ',')} € manquant</span>`;
+    } else {
+      resteEl.innerHTML = `<span class="reste-err">+${Math.abs(reste).toFixed(2).replace('.', ',')} € en trop</span>`;
+    }
+    // Highlight champs en erreur
+    document.getElementById('montant-espece').classList.toggle('error', reste !== 0 && Math.abs(reste) >= 0.001);
+    document.getElementById('montant-cheque').classList.toggle('error', reste !== 0 && Math.abs(reste) >= 0.001);
+  }
+
+  document.getElementById('nb-tickets').addEventListener('input', updateMontant);
+  document.getElementById('montant-espece').addEventListener('input', updateReste);
+  document.getElementById('montant-cheque').addEventListener('input', updateReste);
+  updateMontant();
+
+  // --- Valider vente ---
+  window.validerVente = async function() {
+    const alertBox = document.getElementById('saisie-alert');
+    alertBox.innerHTML = '';
+    if (!selectedEleve) {
+      alertBox.innerHTML = '<div class="alert alert-error">Veuillez sélectionner un élève.</div>';
+      return;
+    }
+    const nb = parseInt(document.getElementById('nb-tickets').value);
+    if (isNaN(nb) || nb < 0) {
+      alertBox.innerHTML = '<div class="alert alert-error">Nombre de tickets invalide.</div>';
+      return;
+    }
+    const montantTotal = nb * PRIX_TICKET;
+    const montantEspece = parseFloat(document.getElementById('montant-espece').value) || 0;
+    const montantCheque = parseFloat(document.getElementById('montant-cheque').value) || 0;
+
+    // Vérification paiement seulement si montant > 0
+    if (montantTotal > 0) {
+      const reste = montantTotal - montantEspece - montantCheque;
+      if (Math.abs(reste) >= 0.01) {
+        alertBox.innerHTML = `<div class="alert alert-error">Le total espèces + chèque (${(montantEspece + montantCheque).toFixed(2).replace('.', ',')} €) ne correspond pas au montant dû (${montantTotal.toFixed(2).replace('.', ',')} €).</div>`;
+        return;
+      }
+    }
+    if (montantEspece < 0 || montantCheque < 0) {
+      alertBox.innerHTML = '<div class="alert alert-error">Les montants ne peuvent pas être négatifs.</div>';
+      return;
+    }
+
+    // Déterminer le type de paiement
+    let typePaiement = 'aucun';
+    if (montantTotal > 0) {
+      typePaiement = 'mixte';
+      if (montantEspece === 0) typePaiement = 'cheque';
+      else if (montantCheque === 0) typePaiement = 'espece';
+    }
+
+    const btn = document.getElementById('btn-valider');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="loader"></span> Enregistrement...';
+
+    try {
+      await addDoc(collection(db, 'ventes'), {
+        eleveId: selectedEleve.id,
+        nom: selectedEleve.nom,
+        prenom: selectedEleve.prenom,
+        classe: selectedEleve.classe || '',
+        nbTickets: nb,
+        paiement: typePaiement,
+        montantEspece,
+        montantCheque,
+        montant: montantTotal,
+        createdAt: serverTimestamp()
+      });
+
+      // Mise à jour du compteur sur l'élève
+      const eleveRef = doc(db, 'eleves', selectedEleve.id);
+      const newTotal = (selectedEleve.ticketsVendus || 0) + nb;
+      await updateDoc(eleveRef, { ticketsVendus: newTotal, repondu: true });
+
+      // Mise à jour du cache
+      const idx = elevesCache.findIndex(e => e.id === selectedEleve.id);
+      if (idx >= 0) { elevesCache[idx].ticketsVendus = newTotal; elevesCache[idx].repondu = true; }
+
+      let paiementLabel = nb === 0 ? 'Aucun ticket' : (typePaiement === 'espece' ? 'Espèces' : typePaiement === 'cheque' ? 'Chèque' : `Mixte (${montantEspece.toFixed(2)}€ esp. + ${montantCheque.toFixed(2)}€ chq.)`);
+      showToast(`✓ Vente enregistrée — ${nb} ticket(s) — ${montantTotal.toFixed(2).replace('.', ',')} € — ${paiementLabel}`);
+      clearEleve();
+      document.getElementById('nb-tickets').value = 10;
+      updateMontant();
+    } catch (err) {
+      alertBox.innerHTML = `<div class="alert alert-error">Erreur : ${err.message}</div>`;
+    }
+    btn.disabled = false;
+    btn.innerHTML = '✓ Valider la vente';
+    if (!selectedEleve) btn.disabled = true;
+  };
+
+  // ===================== HISTORIQUE =====================
+
+  let ventesCache = []; // toutes les ventes chargées
+
+  window.chargerHistorique = async function() {
+    const tbody = document.getElementById('tbody-historique');
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:20px;">Chargement...</td></tr>';
+    try {
+      const q = query(collection(db, 'ventes'), orderBy('createdAt', 'desc'));
+      const snap = await getDocs(q);
+      ventesCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      filtrerHistorique();
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="8" style="color:#dc2626;padding:20px;">${err.message}</td></tr>`;
+    }
+  };
+
+  window.filtrerHistorique = function() {
+    const tbody = document.getElementById('tbody-historique');
+    const filtreDate = document.getElementById('filtre-date').value; // "YYYY-MM-DD" ou ""
+
+    const ventes = filtreDate
+      ? ventesCache.filter(v => {
+          if (!v.createdAt) return false;
+          const d = new Date(v.createdAt.seconds * 1000);
+          const iso = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+          return iso === filtreDate;
+        })
+      : ventesCache;
+
+    // Récapitulatif
+    const recapBox = document.getElementById('recap-date');
+    if (filtreDate) {
+      const totEsp  = ventes.reduce((s, v) => s + (v.montantEspece !== undefined ? v.montantEspece : (v.paiement === 'espece' ? v.montant : 0)), 0);
+      const totChq  = ventes.reduce((s, v) => s + (v.montantCheque !== undefined ? v.montantCheque : (v.paiement === 'cheque' ? v.montant : 0)), 0);
+      const totMnt  = ventes.reduce((s, v) => s + v.montant, 0);
+      const totTck  = ventes.reduce((s, v) => s + v.nbTickets, 0);
+      const [y,m,j] = filtreDate.split('-');
+      document.getElementById('recap-date-label').textContent = `${j}/${m}/${y}`;
+      document.getElementById('recap-espece').textContent = totEsp.toFixed(2).replace('.', ',') + ' €';
+      document.getElementById('recap-cheque').textContent = totChq.toFixed(2).replace('.', ',') + ' €';
+      document.getElementById('recap-total').textContent  = totMnt.toFixed(2).replace('.', ',') + ' €';
+      document.getElementById('recap-nb-ventes').textContent = ventes.length;
+      document.getElementById('recap-nb-tickets').textContent = totTck;
+      recapBox.style.display = 'block';
+    } else {
+      recapBox.style.display = 'none';
+    }
+
+    if (!ventes.length) {
+      tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:30px;">${filtreDate ? 'Aucune vente ce jour-là' : 'Aucune vente enregistrée'}</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = ventes.map(v => {
+      const date = v.createdAt ? new Date(v.createdAt.seconds * 1000).toLocaleString('fr-FR') : '—';
+      const esp = v.montantEspece !== undefined ? v.montantEspece : (v.paiement === 'espece' ? v.montant : 0);
+      const chq = v.montantCheque !== undefined ? v.montantCheque : (v.paiement === 'cheque' ? v.montant : 0);
+      return `<tr>
+        <td style="font-size:0.82rem;color:#64748b;">${date}</td>
+        <td><strong>${v.nom} ${v.prenom}</strong></td>
+        <td>${v.classe || '—'}</td>
+        <td style="font-weight:600;">${v.nbTickets}</td>
+        <td>${esp > 0 ? esp.toFixed(2).replace('.', ',') + ' €' : '—'}</td>
+        <td>${chq > 0 ? chq.toFixed(2).replace('.', ',') + ' €' : '—'}</td>
+        <td style="font-weight:700;color:#1e40af;">${v.montant.toFixed(2).replace('.', ',')} €</td>
+        <td><button class="btn-delete" onclick="supprimerVente('${v.id}', '${v.eleveId}', ${v.nbTickets})" title="Supprimer cette vente">🗑</button></td>
+      </tr>`;
+    }).join('');
+  };
+
+  // --- Supprimer une vente ---
+  window.supprimerVente = async function(venteId, eleveId, nbTickets) {
+    if (!confirm(`Supprimer cette vente de ${nbTickets} ticket(s) ? Le compteur de l'élève sera mis à jour.`)) return;
+    try {
+      await deleteDoc(doc(db, 'ventes', venteId));
+      // Recalculer les tickets vendus de l'élève depuis toutes ses ventes restantes
+      const snap = await getDocs(query(collection(db, 'ventes'), orderBy('createdAt', 'desc')));
+      const ventesEleve = snap.docs.filter(d => d.data().eleveId === eleveId);
+      const totalRestant = ventesEleve.reduce((s, d) => s + d.data().nbTickets, 0);
+      const encoreRepondu = ventesEleve.length > 0;
+      await updateDoc(doc(db, 'eleves', eleveId), { ticketsVendus: totalRestant, repondu: encoreRepondu });
+      // Mise à jour cache
+      const idx = elevesCache.findIndex(e => e.id === eleveId);
+      if (idx >= 0) { elevesCache[idx].ticketsVendus = totalRestant; elevesCache[idx].repondu = encoreRepondu; }
+      showToast('✓ Vente supprimée');
+      chargerHistorique();
+    } catch (err) {
+      showToast('Erreur suppression : ' + err.message);
+    }
+  };
+
+  // ===================== STATS =====================
+
+  window.chargerStats = async function() {
+    const tbody = document.getElementById('tbody-stats');
+    const grid = document.getElementById('stats-grid');
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:20px;">Chargement...</td></tr>';
+    try {
+      const [snapVentes, snapEleves] = await Promise.all([
+        getDocs(collection(db, 'ventes')),
+        getDocs(collection(db, 'eleves'))
+      ]);
+      const ventes = snapVentes.docs.map(d => d.data());
+      const totalEleves = snapEleves.size;
+
+      const totalTickets = ventes.reduce((s, v) => s + v.nbTickets, 0);
+      const totalMontant = ventes.reduce((s, v) => s + v.montant, 0);
+      const totalCheques = ventes.reduce((s, v) => s + (v.montantCheque !== undefined ? v.montantCheque : (v.paiement === 'cheque' ? v.montant : 0)), 0);
+      const totalEspeces = ventes.reduce((s, v) => s + (v.montantEspece !== undefined ? v.montantEspece : (v.paiement === 'espece' ? v.montant : 0)), 0);
+      const nbElevesRepondus = new Set(ventes.map(v => v.eleveId)).size;
+      const pct = totalEleves > 0 ? Math.round((nbElevesRepondus / totalEleves) * 100) : 0;
+
+      // Barre de participation
+      const card = document.getElementById('participation-card');
+      card.style.display = 'block';
+      document.getElementById('participation-pct').textContent = pct + ' %';
+      document.getElementById('participation-bar').style.width = pct + '%';
+      document.getElementById('participation-detail').textContent = `${nbElevesRepondus} élève(s) ont répondu sur ${totalEleves}`;
+      document.getElementById('participation-restant').textContent = `${totalEleves - nbElevesRepondus} restant(s)`;
+
+      grid.innerHTML = `
+        <div class="stat-card"><div class="num">${totalTickets}</div><div class="lbl">Tickets vendus</div></div>
+        <div class="stat-card"><div class="num">${totalMontant.toFixed(2).replace('.', ',')} €</div><div class="lbl">Total encaissé</div></div>
+        <div class="stat-card"><div class="num">${totalCheques.toFixed(2).replace('.', ',')} €</div><div class="lbl">Par chèque</div></div>
+        <div class="stat-card"><div class="num">${totalEspeces.toFixed(2).replace('.', ',')} €</div><div class="lbl">En espèces</div></div>
+        <div class="stat-card"><div class="num">${nbElevesRepondus} / ${totalEleves}</div><div class="lbl">Élèves ayant répondu</div></div>
+        <div class="stat-card"><div class="num">${ventes.length}</div><div class="lbl">Transactions</div></div>
+      `;
+
+      // Récap par élève
+      const parEleve = {};
+      ventes.forEach(v => {
+        if (!parEleve[v.eleveId]) parEleve[v.eleveId] = { nom: v.nom, prenom: v.prenom, classe: v.classe, tickets: 0, montant: 0 };
+        parEleve[v.eleveId].tickets += v.nbTickets;
+        parEleve[v.eleveId].montant += v.montant;
+      });
+      const sorted = Object.values(parEleve).sort((a, b) => b.tickets - a.tickets);
+      if (!sorted.length) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:30px;">Aucune vente</td></tr>';
+        return;
+      }
+      tbody.innerHTML = sorted.map(e => `
+        <tr>
+          <td><strong>${e.nom} ${e.prenom}</strong></td>
+          <td>${e.classe || '—'}</td>
+          <td style="font-weight:600;">${e.tickets}</td>
+          <td style="font-weight:700;color:#1e40af;">${e.montant.toFixed(2).replace('.', ',')} €</td>
+        </tr>
+      `).join('');
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="4" style="color:#dc2626;padding:20px;">${err.message}</td></tr>`;
+    }
+  };
+
+  // ===================== EXPORT CSV =====================
+
+  window.exporterCSV = async function() {
+    try {
+      const q = query(collection(db, 'ventes'), orderBy('createdAt', 'desc'));
+      const snap = await getDocs(q);
+      const rows = [['Date', 'Nom', 'Prénom', 'Classe', 'Tickets', 'Espèces (€)', 'Chèque (€)', 'Montant total (€)']];
+      snap.docs.forEach(d => {
+        const v = d.data();
+        const date = v.createdAt ? new Date(v.createdAt.seconds * 1000).toLocaleString('fr-FR') : '';
+        const esp = v.montantEspece !== undefined ? v.montantEspece : (v.paiement === 'espece' ? v.montant : 0);
+        const chq = v.montantCheque !== undefined ? v.montantCheque : (v.paiement === 'cheque' ? v.montant : 0);
+        rows.push([date, v.nom, v.prenom, v.classe || '', v.nbTickets, esp.toFixed(2), chq.toFixed(2), v.montant.toFixed(2)]);
+      });
+      const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(';')).join('\n');
+      const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `tombola_ventes_${new Date().toISOString().slice(0,10)}.csv`;
+      a.click(); URL.revokeObjectURL(url);
+      showToast('✓ Export CSV téléchargé');
+    } catch (err) {
+      showToast('Erreur export : ' + err.message);
+    }
+  };
+
+  // ===================== IMPORT ÉLÈVES =====================
+
+  const dropZone = document.getElementById('drop-zone');
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault(); dropZone.classList.remove('dragover');
+    const file = e.dataTransfer.files[0];
+    if (file) parseExcel(file);
+  });
+
+  window.handleFileSelect = function(e) {
+    const file = e.target.files[0];
+    if (file) parseExcel(file);
+  };
+
+  function parseExcel(file) {
+    const alertBox = document.getElementById('import-alert');
+    alertBox.innerHTML = '';
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        const wb = XLSX.read(e.target.result, { type: 'array' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+        if (!rows.length) { alertBox.innerHTML = '<div class="alert alert-error">Le fichier est vide.</div>'; return; }
+
+        const normalize = s => s.toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const keys = Object.keys(rows[0]);
+        const findCol = names => keys.find(k => names.includes(normalize(k)));
+
+        const colNom = findCol(['nom']);
+        const colPrenom = findCol(['prenom', 'prénom']);
+        const colClasse = findCol(['classe']);
+
+        if (!colNom || !colPrenom) {
+          alertBox.innerHTML = '<div class="alert alert-error">Colonnes "Nom" et "Prénom" introuvables. Vérifiez votre fichier.</div>';
+          return;
+        }
+
+        importData = rows.map(r => ({
+          nom: String(r[colNom] || '').trim().toUpperCase(),
+          prenom: String(r[colPrenom] || '').trim(),
+          classe: colClasse ? String(r[colClasse] || '').trim() : ''
+        })).filter(e => e.nom && e.prenom);
+
+        document.getElementById('preview-count').textContent = importData.length;
+        document.getElementById('tbody-preview').innerHTML = importData.slice(0, 20).map((e, i) =>
+          `<tr><td>${i+1}</td><td>${e.nom}</td><td>${e.prenom}</td><td>${e.classe || '—'}</td></tr>`
+        ).join('') + (importData.length > 20 ? `<tr><td colspan="4" style="text-align:center;color:#94a3b8;font-style:italic;">... et ${importData.length - 20} autres</td></tr>` : '');
+        document.getElementById('import-preview').style.display = 'block';
+      } catch (err) {
+        alertBox.innerHTML = `<div class="alert alert-error">Erreur lecture fichier : ${err.message}</div>`;
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  window.importerEleves = async function() {
+    const alertBox = document.getElementById('import-alert');
+    const btn = document.getElementById('btn-import');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="loader"></span> Import en cours...';
+    try {
+      const BATCH_SIZE = 500;
+      for (let i = 0; i < importData.length; i += BATCH_SIZE) {
+        const batch = writeBatch(db);
+        importData.slice(i, i + BATCH_SIZE).forEach(e => {
+          const ref = doc(collection(db, 'eleves'));
+          batch.set(ref, { nom: e.nom, prenom: e.prenom, classe: e.classe, ticketsVendus: 0 });
+        });
+        await batch.commit();
+      }
+      alertBox.innerHTML = `<div class="alert alert-success">✓ ${importData.length} élèves importés avec succès !</div>`;
+      document.getElementById('import-preview').style.display = 'none';
+      importData = [];
+      document.getElementById('file-input').value = '';
+      await chargerEleves();
+      await chargerNbEleves();
+      showToast(`✓ ${elevesCache.length} élèves disponibles`);
+    } catch (err) {
+      alertBox.innerHTML = `<div class="alert alert-error">Erreur import : ${err.message}</div>`;
+    }
+    btn.disabled = false;
+    btn.innerHTML = '⬆ Importer dans Firestore';
+  };
+
+  window.annulerImport = function() {
+    importData = [];
+    document.getElementById('import-preview').style.display = 'none';
+    document.getElementById('file-input').value = '';
+  };
+
+  async function chargerNbEleves() {
+    const snap = await getDocs(collection(db, 'eleves'));
+    document.getElementById('nb-eleves-db').textContent = `${snap.size} élève(s) en base de données.`;
+  }
+  window.chargerNbEleves = chargerNbEleves;
+
+  window.supprimerTousEleves = async function() {
+    if (!confirm('Supprimer TOUS les élèves de la base ? (les ventes ne seront pas supprimées)')) return;
+    const snap = await getDocs(collection(db, 'eleves'));
+    const BATCH_SIZE = 500;
+    const docs = snap.docs;
+    for (let i = 0; i < docs.length; i += BATCH_SIZE) {
+      const batch = writeBatch(db);
+      docs.slice(i, i + BATCH_SIZE).forEach(d => batch.delete(d.ref));
+      await batch.commit();
+    }
+    elevesCache = [];
+    await chargerNbEleves();
+    showToast('Tous les élèves ont été supprimés');
+  };
+
+</script>
+</body>
+</html>
