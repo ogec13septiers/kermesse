@@ -580,9 +580,9 @@
     const montant = nb * PRIX_TICKET;
     document.getElementById('montant-display').textContent = montant.toFixed(2).replace('.', ',') + ' €';
     document.getElementById('montant-detail').textContent = `${nb} ticket(s) × ${PRIX_TICKET} €`;
-    // Pré-remplir espèces avec le montant total, chèque à 0
-    document.getElementById('montant-espece').value = montant.toFixed(2);
-    document.getElementById('montant-cheque').value = '0';
+    // Pré-remplir chèque avec le montant total, espèces à 0
+    document.getElementById('montant-espece').value = '0';
+    document.getElementById('montant-cheque').value = montant.toFixed(2);
     updateReste();
   }
 
