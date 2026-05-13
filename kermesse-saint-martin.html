@@ -265,6 +265,13 @@
   .benevolat-option-label span { font-size:0.8rem; color:var(--text-light); }
   .benevolat-modal-actions { display:flex; gap:0.8rem; justify-content:flex-end; margin-top:1.2rem; }
 
+  /* MODAL JETONS */
+  #jetons-modal {
+    display:none; position:fixed; inset:0; background:rgba(10,20,40,0.55);
+    z-index:2000; align-items:center; justify-content:center;
+  }
+  #jetons-modal.open { display:flex; }
+
   /* MODAL REPAS */
   #repas-modal {
     display:none; position:fixed; inset:0; background:rgba(10,20,40,0.55);
@@ -331,6 +338,20 @@
     <div class="benevolat-modal-actions">
       <button class="btn btn-secondary" onclick="confirmBenevolat(false)">Passer</button>
       <button class="btn btn-primary" onclick="confirmBenevolat(true)">✅ Confirmer</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL JETONS / HELLOASSO -->
+<div id="jetons-modal">
+  <div class="repas-modal-box">
+    <div style="font-size:2rem;margin-bottom:0.5rem">🎟️</div>
+    <h3>Acheter des jetons pour les stands</h3>
+    <p>Évitez la queue le jour J ! Achetez vos jetons à l'avance via HelloAsso.<br>
+       Ils seront remis à votre enfant par son enseignant avant la kermesse.</p>
+    <div class="repas-modal-actions">
+      <button class="btn btn-secondary" onclick="closeJetonsModal()">Plus tard</button>
+      <button class="btn btn-primary" onclick="openHelloAssoJetons()">🎟️ Acheter mes jetons</button>
     </div>
   </div>
 </div>
@@ -573,6 +594,22 @@
         <div style="background:#f3f5fb;border-radius:8px;padding:0.7rem 1rem;font-size:0.85rem;color:var(--text-light)">
           Aperçu : <strong id="setting-subtitle-preview"></strong>
         </div>
+        <button class="btn btn-primary" onclick="saveSettings()" style="align-self:start">💾 Enregistrer</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🎟️ Lien HelloAsso — Achat de jetons pour les stands</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>URL HelloAsso (laissez vide pour ne pas proposer l'achat de jetons)</label>
+          <input type="url" id="setting-helloasso-jetons"
+            placeholder="https://www.helloasso.com/associations/..."
+            oninput="previewSettings()" />
+        </div>
+        <p style="font-size:0.83rem;color:var(--text-light)">
+          Ce lien sera proposé à chaque parent après validation de son inscription, avant la réservation de repas. Les jetons seront remis aux enfants par leur enseignant.
+        </p>
         <button class="btn btn-primary" onclick="saveSettings()" style="align-self:start">💾 Enregistrer</button>
       </div>
     </div>
@@ -1400,9 +1437,12 @@ window.confirmBenevolat = (save) => {
   renderRecentInscriptions();
   renderInscriptionSelects();
 
-  // Proposer la réservation repas si un lien HelloAsso est configuré, puis rediriger vers le planning
-  const helloasso = (state.settings.helloassoUrl || '').trim();
-  if (helloasso) {
+  // Proposer l'achat de jetons si un lien est configuré, puis repas, puis planning
+  const jetonsUrl  = (state.settings.helloassoJetonsUrl || '').trim();
+  const helloasso  = (state.settings.helloassoUrl || '').trim();
+  if (jetonsUrl) {
+    $('jetons-modal').classList.add('open');
+  } else if (helloasso) {
     $('repas-modal').classList.add('open');
   } else {
     showPage('planning');
@@ -1823,6 +1863,31 @@ window.deleteVolunteering = (id) => {
   toast('Entrée supprimée');
 };
 
+// ── JETONS / HELLOASSO ───────────────────────────────────────
+window.openHelloAssoJetons = () => {
+  const url = (state.settings.helloassoJetonsUrl || '').trim();
+  if (url) window.open(url, '_blank', 'noopener');
+  $('jetons-modal').classList.remove('open');
+  // Proposer ensuite les repas si configuré
+  const repasUrl = (state.settings.helloassoUrl || '').trim();
+  if (repasUrl) {
+    $('repas-modal').classList.add('open');
+  } else {
+    showPage('planning');
+  }
+};
+
+window.closeJetonsModal = () => {
+  $('jetons-modal').classList.remove('open');
+  // Proposer ensuite les repas si configuré
+  const repasUrl = (state.settings.helloassoUrl || '').trim();
+  if (repasUrl) {
+    $('repas-modal').classList.add('open');
+  } else {
+    showPage('planning');
+  }
+};
+
 // ── REPAS / HELLOASSO ────────────────────────────────────────
 window.openHelloAsso = () => {
   const url = (state.settings.helloassoUrl || '').trim();
@@ -1838,6 +1903,7 @@ window.closeRepasModal = () => {
 
 // Fermer sur clic backdrop
 document.addEventListener('DOMContentLoaded', () => {
+  $('jetons-modal').addEventListener('click', e => { if (e.target === $('jetons-modal')) closeJetonsModal(); });
   $('repas-modal').addEventListener('click', e => { if (e.target === $('repas-modal')) closeRepasModal(); });
 });
 
@@ -1851,8 +1917,10 @@ function applySettings() {
 function renderReglages() {
   const s = state.settings || {};
   const subtitleEl = $('setting-subtitle');
+  const helloassoJetonsEl = $('setting-helloasso-jetons');
   const helloassoEl = $('setting-helloasso');
   if (subtitleEl) subtitleEl.value = s.subtitle || '';
+  if (helloassoJetonsEl) helloassoJetonsEl.value = s.helloassoJetonsUrl || '';
   if (helloassoEl) helloassoEl.value = s.helloassoUrl || '';
   previewSettings();
 }
@@ -1864,10 +1932,12 @@ window.previewSettings = () => {
 };
 
 window.saveSettings = () => {
-  const sub = (($('setting-subtitle') || {}).value || '').trim();
-  const url = (($('setting-helloasso') || {}).value || '').trim();
-  state.settings.subtitle    = sub;
-  state.settings.helloassoUrl = url;
+  const sub        = (($('setting-subtitle') || {}).value || '').trim();
+  const jetonsUrl  = (($('setting-helloasso-jetons') || {}).value || '').trim();
+  const url        = (($('setting-helloasso') || {}).value || '').trim();
+  state.settings.subtitle            = sub;
+  state.settings.helloassoJetonsUrl  = jetonsUrl;
+  state.settings.helloassoUrl        = url;
   saveData();
   applySettings();
   toast('✅ Paramètres enregistrés');
