@@ -524,7 +524,6 @@
     const q = searchInput.value.trim().toLowerCase();
     if (!q) { suggestionsBox.style.display = 'none'; return; }
     const results = elevesCache.filter(e =>
-      !e.repondu &&
       (e.nom.toLowerCase().includes(q) ||
       e.prenom.toLowerCase().includes(q) ||
       (e.classe || '').toLowerCase().includes(q))
