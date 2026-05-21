@@ -350,6 +350,7 @@
           <span>💵 Espèces : <strong id="recap-espece" style="color:#16a34a;">—</strong></span>
           <span>🏦 Chèque : <strong id="recap-cheque" style="color:#1d4ed8;">—</strong></span>
           <span>Total : <strong id="recap-total" style="color:#1e40af;">—</strong></span>
+          <span>Don 🎁 : <strong id="recap-pv" style="color:#16a34a;">—</strong></span>
           <span style="color:#64748b; font-size:0.85rem;"><span id="recap-nb-ventes"></span> vente(s) · <span id="recap-nb-tickets"></span> ticket(s)</span>
         </div>
       </div>
@@ -364,12 +365,13 @@
             <th>Tickets</th>
             <th>Espèces</th>
             <th>Chèque</th>
-            <th>Montant</th>
+            <th>Montant dû</th>
+            <th>Don 🎁</th>
             <th></th>
           </tr>
         </thead>
         <tbody id="tbody-historique">
-          <tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:30px;">Chargement...</td></tr>
+          <tr><td colspan="9" style="text-align:center;color:#94a3b8;padding:30px;">Chargement...</td></tr>
         </tbody>
       </table>
     </div>
@@ -403,11 +405,12 @@
             <th>Élève</th>
             <th>Classe</th>
             <th>Tickets vendus</th>
-            <th>Montant total</th>
+            <th>Montant dû</th>
+            <th>Don 🎁</th>
           </tr>
         </thead>
         <tbody id="tbody-stats">
-          <tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:30px;">Chargement...</td></tr>
+          <tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:30px;">Chargement...</td></tr>
         </tbody>
       </table>
     </div>
@@ -591,18 +594,20 @@
     const total = nb * PRIX_TICKET;
     const espece = parseFloat(document.getElementById('montant-espece').value) || 0;
     const cheque = parseFloat(document.getElementById('montant-cheque').value) || 0;
-    const reste = total - espece - cheque;
+    const encaisse = espece + cheque;
+    const diff = encaisse - total; // positif = plus-value, négatif = manquant
     const resteEl = document.getElementById('paiement-reste');
-    if (Math.abs(reste) < 0.001) {
+    if (Math.abs(diff) < 0.001) {
       resteEl.innerHTML = `<span class="reste-ok">✓ Soldé</span>`;
-    } else if (reste > 0) {
-      resteEl.innerHTML = `<span class="reste-err">−${reste.toFixed(2).replace('.', ',')} € manquant</span>`;
+    } else if (diff < 0) {
+      resteEl.innerHTML = `<span class="reste-err">−${Math.abs(diff).toFixed(2).replace('.', ',')} € manquant</span>`;
     } else {
-      resteEl.innerHTML = `<span class="reste-err">+${Math.abs(reste).toFixed(2).replace('.', ',')} € en trop</span>`;
+      resteEl.innerHTML = `<span class="reste-ok">+${diff.toFixed(2).replace('.', ',')} € de don 🎁</span>`;
     }
-    // Highlight champs en erreur
-    document.getElementById('montant-espece').classList.toggle('error', reste !== 0 && Math.abs(reste) >= 0.001);
-    document.getElementById('montant-cheque').classList.toggle('error', reste !== 0 && Math.abs(reste) >= 0.001);
+    // Erreur uniquement si manquant
+    const erreur = diff < -0.001;
+    document.getElementById('montant-espece').classList.toggle('error', erreur);
+    document.getElementById('montant-cheque').classList.toggle('error', erreur);
   }
 
   document.getElementById('nb-tickets').addEventListener('input', updateMontant);
@@ -626,12 +631,14 @@
     const montantTotal = nb * PRIX_TICKET;
     const montantEspece = parseFloat(document.getElementById('montant-espece').value) || 0;
     const montantCheque = parseFloat(document.getElementById('montant-cheque').value) || 0;
+    const montantEncaisse = montantEspece + montantCheque;
+    const plusValue = Math.max(0, montantEncaisse - montantTotal);
 
-    // Vérification paiement seulement si montant > 0
+    // Vérification : le montant encaissé ne doit pas être inférieur au prix des tickets
     if (montantTotal > 0) {
-      const reste = montantTotal - montantEspece - montantCheque;
-      if (Math.abs(reste) >= 0.01) {
-        alertBox.innerHTML = `<div class="alert alert-error">Le total espèces + chèque (${(montantEspece + montantCheque).toFixed(2).replace('.', ',')} €) ne correspond pas au montant dû (${montantTotal.toFixed(2).replace('.', ',')} €).</div>`;
+      const manquant = montantTotal - montantEncaisse;
+      if (manquant >= 0.01) {
+        alertBox.innerHTML = `<div class="alert alert-error">Le total espèces + chèque (${montantEncaisse.toFixed(2).replace('.', ',')} €) est insuffisant — il manque ${manquant.toFixed(2).replace('.', ',')} €.</div>`;
         return;
       }
     }
@@ -642,7 +649,7 @@
 
     // Déterminer le type de paiement
     let typePaiement = 'aucun';
-    if (montantTotal > 0) {
+    if (montantEncaisse > 0) {
       typePaiement = 'mixte';
       if (montantEspece === 0) typePaiement = 'cheque';
       else if (montantCheque === 0) typePaiement = 'espece';
@@ -663,6 +670,8 @@
         montantEspece,
         montantCheque,
         montant: montantTotal,
+        montantEncaisse,
+        plusValue,
         createdAt: serverTimestamp()
       });
 
@@ -676,7 +685,8 @@
       if (idx >= 0) { elevesCache[idx].ticketsVendus = newTotal; elevesCache[idx].repondu = true; }
 
       let paiementLabel = nb === 0 ? 'Aucun ticket' : (typePaiement === 'espece' ? 'Espèces' : typePaiement === 'cheque' ? 'Chèque' : `Mixte (${montantEspece.toFixed(2)}€ esp. + ${montantCheque.toFixed(2)}€ chq.)`);
-      showToast(`✓ Vente enregistrée — ${nb} ticket(s) — ${montantTotal.toFixed(2).replace('.', ',')} € — ${paiementLabel}`);
+      const plusStr = plusValue > 0 ? ` — dont +${plusValue.toFixed(2).replace('.', ',')} € de don 🎁` : '';
+      showToast(`✓ Vente enregistrée — ${nb} ticket(s) — ${montantEncaisse.toFixed(2).replace('.', ',')} € — ${paiementLabel}${plusStr}`);
       clearEleve();
       document.getElementById('nb-tickets').value = 10;
       updateMontant();
@@ -694,7 +704,7 @@
 
   window.chargerHistorique = async function() {
     const tbody = document.getElementById('tbody-historique');
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:20px;">Chargement...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#94a3b8;padding:20px;">Chargement...</td></tr>';
     try {
       const q = query(collection(db, 'ventes'), orderBy('createdAt', 'desc'));
       const snap = await getDocs(q);
@@ -724,12 +734,14 @@
       const totEsp  = ventes.reduce((s, v) => s + (v.montantEspece !== undefined ? v.montantEspece : (v.paiement === 'espece' ? v.montant : 0)), 0);
       const totChq  = ventes.reduce((s, v) => s + (v.montantCheque !== undefined ? v.montantCheque : (v.paiement === 'cheque' ? v.montant : 0)), 0);
       const totMnt  = ventes.reduce((s, v) => s + v.montant, 0);
+      const totPv   = ventes.reduce((s, v) => s + (v.plusValue || 0), 0);
       const totTck  = ventes.reduce((s, v) => s + v.nbTickets, 0);
       const [y,m,j] = filtreDate.split('-');
       document.getElementById('recap-date-label').textContent = `${j}/${m}/${y}`;
       document.getElementById('recap-espece').textContent = totEsp.toFixed(2).replace('.', ',') + ' €';
       document.getElementById('recap-cheque').textContent = totChq.toFixed(2).replace('.', ',') + ' €';
       document.getElementById('recap-total').textContent  = totMnt.toFixed(2).replace('.', ',') + ' €';
+      document.getElementById('recap-pv').textContent     = totPv > 0 ? '+' + totPv.toFixed(2).replace('.', ',') + ' €' : '—';
       document.getElementById('recap-nb-ventes').textContent = ventes.length;
       document.getElementById('recap-nb-tickets').textContent = totTck;
       recapBox.style.display = 'block';
@@ -738,7 +750,7 @@
     }
 
     if (!ventes.length) {
-      tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:30px;">${filtreDate ? 'Aucune vente ce jour-là' : 'Aucune vente enregistrée'}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:#94a3b8;padding:30px;">${filtreDate ? 'Aucune vente ce jour-là' : 'Aucune vente enregistrée'}</td></tr>`;
       return;
     }
 
@@ -746,6 +758,7 @@
       const date = v.createdAt ? new Date(v.createdAt.seconds * 1000).toLocaleString('fr-FR') : '—';
       const esp = v.montantEspece !== undefined ? v.montantEspece : (v.paiement === 'espece' ? v.montant : 0);
       const chq = v.montantCheque !== undefined ? v.montantCheque : (v.paiement === 'cheque' ? v.montant : 0);
+      const pv = v.plusValue || 0;
       return `<tr>
         <td style="font-size:0.82rem;color:#64748b;">${date}</td>
         <td><strong>${v.nom} ${v.prenom}</strong></td>
@@ -754,6 +767,7 @@
         <td>${esp > 0 ? esp.toFixed(2).replace('.', ',') + ' €' : '—'}</td>
         <td>${chq > 0 ? chq.toFixed(2).replace('.', ',') + ' €' : '—'}</td>
         <td style="font-weight:700;color:#1e40af;">${v.montant.toFixed(2).replace('.', ',')} €</td>
+        <td style="font-weight:700;color:#16a34a;">${pv > 0 ? '+' + pv.toFixed(2).replace('.', ',') + ' €' : '—'}</td>
         <td><button class="btn-delete" onclick="supprimerVente('${v.id}', '${v.eleveId}', ${v.nbTickets})" title="Supprimer cette vente">🗑</button></td>
       </tr>`;
     }).join('');
@@ -798,6 +812,7 @@
       const totalMontant = ventes.reduce((s, v) => s + v.montant, 0);
       const totalCheques = ventes.reduce((s, v) => s + (v.montantCheque !== undefined ? v.montantCheque : (v.paiement === 'cheque' ? v.montant : 0)), 0);
       const totalEspeces = ventes.reduce((s, v) => s + (v.montantEspece !== undefined ? v.montantEspece : (v.paiement === 'espece' ? v.montant : 0)), 0);
+      const totalPlusValue = ventes.reduce((s, v) => s + (v.plusValue || 0), 0);
       const nbElevesRepondus = new Set(ventes.map(v => v.eleveId)).size;
       const pct = totalEleves > 0 ? Math.round((nbElevesRepondus / totalEleves) * 100) : 0;
 
@@ -811,9 +826,11 @@
 
       grid.innerHTML = `
         <div class="stat-card"><div class="num">${totalTickets}</div><div class="lbl">Tickets vendus</div></div>
-        <div class="stat-card"><div class="num">${totalMontant.toFixed(2).replace('.', ',')} €</div><div class="lbl">Total encaissé</div></div>
+        <div class="stat-card"><div class="num">${totalMontant.toFixed(2).replace('.', ',')} €</div><div class="lbl">Total dû</div></div>
         <div class="stat-card"><div class="num">${totalCheques.toFixed(2).replace('.', ',')} €</div><div class="lbl">Par chèque</div></div>
         <div class="stat-card"><div class="num">${totalEspeces.toFixed(2).replace('.', ',')} €</div><div class="lbl">En espèces</div></div>
+        <div class="stat-card" style="border:2px solid #86efac;"><div class="num" style="color:#16a34a;">+${totalPlusValue.toFixed(2).replace('.', ',')} €</div><div class="lbl">Dons reçus 🎁</div></div>
+        <div class="stat-card"><div class="num">${(totalMontant + totalPlusValue).toFixed(2).replace('.', ',')} €</div><div class="lbl">Total encaissé</div></div>
         <div class="stat-card"><div class="num">${nbElevesRepondus} / ${totalEleves}</div><div class="lbl">Élèves ayant répondu</div></div>
         <div class="stat-card"><div class="num">${ventes.length}</div><div class="lbl">Transactions</div></div>
       `;
@@ -821,13 +838,14 @@
       // Récap par élève
       const parEleve = {};
       ventes.forEach(v => {
-        if (!parEleve[v.eleveId]) parEleve[v.eleveId] = { nom: v.nom, prenom: v.prenom, classe: v.classe, tickets: 0, montant: 0 };
+        if (!parEleve[v.eleveId]) parEleve[v.eleveId] = { nom: v.nom, prenom: v.prenom, classe: v.classe, tickets: 0, montant: 0, plusValue: 0 };
         parEleve[v.eleveId].tickets += v.nbTickets;
         parEleve[v.eleveId].montant += v.montant;
+        parEleve[v.eleveId].plusValue += (v.plusValue || 0);
       });
       const sorted = Object.values(parEleve).sort((a, b) => b.tickets - a.tickets);
       if (!sorted.length) {
-        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:30px;">Aucune vente</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:30px;">Aucune vente</td></tr>';
         return;
       }
       tbody.innerHTML = sorted.map(e => `
@@ -836,6 +854,7 @@
           <td>${e.classe || '—'}</td>
           <td style="font-weight:600;">${e.tickets}</td>
           <td style="font-weight:700;color:#1e40af;">${e.montant.toFixed(2).replace('.', ',')} €</td>
+          <td style="font-weight:700;color:#16a34a;">${e.plusValue > 0 ? '+' + e.plusValue.toFixed(2).replace('.', ',') + ' €' : '—'}</td>
         </tr>
       `).join('');
     } catch (err) {
@@ -849,13 +868,14 @@
     try {
       const q = query(collection(db, 'ventes'), orderBy('createdAt', 'desc'));
       const snap = await getDocs(q);
-      const rows = [['Date', 'Nom', 'Prénom', 'Classe', 'Tickets', 'Espèces (€)', 'Chèque (€)', 'Montant total (€)']];
+      const rows = [['Date', 'Nom', 'Prénom', 'Classe', 'Tickets', 'Espèces (€)', 'Chèque (€)', 'Montant dû (€)', 'Don (€)']];
       snap.docs.forEach(d => {
         const v = d.data();
         const date = v.createdAt ? new Date(v.createdAt.seconds * 1000).toLocaleString('fr-FR') : '';
         const esp = v.montantEspece !== undefined ? v.montantEspece : (v.paiement === 'espece' ? v.montant : 0);
         const chq = v.montantCheque !== undefined ? v.montantCheque : (v.paiement === 'cheque' ? v.montant : 0);
-        rows.push([date, v.nom, v.prenom, v.classe || '', v.nbTickets, esp.toFixed(2), chq.toFixed(2), v.montant.toFixed(2)]);
+        const pv = v.plusValue || 0;
+        rows.push([date, v.nom, v.prenom, v.classe || '', v.nbTickets, esp.toFixed(2), chq.toFixed(2), v.montant.toFixed(2), pv.toFixed(2)]);
       });
       const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(';')).join('\n');
       const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
