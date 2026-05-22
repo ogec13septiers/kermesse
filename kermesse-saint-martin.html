@@ -431,7 +431,7 @@
     <!-- Formulaire : contenu rendu dynamiquement selon le mode -->
     <div class="card form-grid" id="inscription-form"></div>
     <div class="card">
-      <div class="card-title">📝 Inscriptions enregistrées</div>
+      <div class="card-title" id="recent-inscriptions-title">📝 Inscriptions enregistrées</div>
       <div id="recent-inscriptions" style="font-size:0.85rem;color:var(--text-light)">Chargement…</div>
     </div>
     <div class="card" id="cancel-request-card">
@@ -1142,6 +1142,7 @@ window.onClasseChange = () => {
     $('step-parent').style.display='none';
     $('step-stand').style.display='none';
     banner.style.display='none';
+    renderRecentInscriptions();
     return;
   }
   const cls = getClass(cid);
@@ -1165,6 +1166,7 @@ window.onClasseChange = () => {
 window.onEnfantChange = () => {
   const cid = $('sel-classe').value;
   const enfant = $('sel-enfant').value;
+  renderRecentInscriptions();
   if (!enfant) {
     $('step-parent').style.display='none';
     $('step-stand').style.display='none';
@@ -1451,8 +1453,33 @@ window.confirmBenevolat = (save) => {
 
 function renderRecentInscriptions() {
   const c = $('recent-inscriptions');
-  if (!state.inscriptions.length) { c.innerHTML='<span style="color:var(--text-light)">Aucune inscription.</span>'; renderCancelSelect(); return; }
-  const sorted = [...state.inscriptions].sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+  const titleEl = $('recent-inscriptions-title');
+  if (!c) return;
+
+  // En mode parent : filtrer par enfant sélectionné
+  let inscriptions = [...state.inscriptions];
+  let emptyMsg = 'Aucune inscription.';
+
+  if (!isAdmin) {
+    const cid    = ($('sel-classe') || {}).value || '';
+    const enfant = ($('sel-enfant') || {}).value || '';
+    if (enfant && cid) {
+      inscriptions = inscriptions.filter(i => i.classId === cid && i.childName === enfant);
+      emptyMsg = 'Aucune inscription pour cet enfant.';
+      if (titleEl) titleEl.textContent = `📝 Inscription de ${enfant}`;
+    } else {
+      // Aucun enfant sélectionné : ne rien afficher
+      if (titleEl) titleEl.textContent = '📝 Inscriptions enregistrées';
+      c.innerHTML = '<span style="color:var(--text-light)">Sélectionnez un enfant pour voir ses inscriptions.</span>';
+      renderCancelSelect();
+      return;
+    }
+  } else {
+    if (titleEl) titleEl.textContent = '📝 Inscriptions enregistrées';
+  }
+
+  if (!inscriptions.length) { c.innerHTML=`<span style="color:var(--text-light)">${emptyMsg}</span>`; renderCancelSelect(); return; }
+  const sorted = inscriptions.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
   c.innerHTML = sorted.map(ins => {
     const cls = getClass(ins.classId);
     const st  = state.stands.find(x=>x.id===ins.standId);
