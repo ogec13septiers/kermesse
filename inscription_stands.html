@@ -682,15 +682,15 @@ async function initFirebase() {
   db = firebase.database();
 }
 
-// ── PERSISTANCE FIREBASE ────────────────────────────────────
+// ── PERSISTANCE FIREBASE ─────────────────────────────────────
+// saveData : enregistre uniquement les données "stables" (stands, classes, settings…)
+// Les inscriptions et le bénévolat ont leurs propres fonctions atomiques.
 async function saveData() {
   try {
     await db.ref('/').update({
       stands: state.stands,
       classes: state.classes,
-      inscriptions: state.inscriptions,
       classRestrictions: state.classRestrictions,
-      volunteering: state.volunteering,
       settings: state.settings
     });
   } catch(err) {
@@ -698,18 +698,61 @@ async function saveData() {
   }
 }
 
+// Écriture atomique d'une seule inscription (évite les race conditions)
+async function saveInscription(ins) {
+  await db.ref('/inscriptions/' + ins.id).set(ins);
+}
+
+// Suppression atomique d'une inscription
+async function deleteInscriptionRemote(id) {
+  await db.ref('/inscriptions/' + id).remove();
+}
+
+// Écriture atomique d'un enregistrement bénévolat
+async function saveVolunteering(vol) {
+  await db.ref('/volunteering/' + vol.id).set(vol);
+}
+
+// Suppression atomique d'un enregistrement bénévolat
+async function deleteVolunteeringRemote(id) {
+  await db.ref('/volunteering/' + id).remove();
+}
+
+// Convertit un objet Firebase {id: {...}, ...} en tableau
+function objToArray(obj) {
+  if (!obj) return [];
+  if (Array.isArray(obj)) return obj; // compatibilité ancien format tableau
+  return Object.values(obj);
+}
+
 async function loadData() {
   try {
     const snapshot = await db.ref('/').once('value');
     const data = snapshot.val() || {};
-    state.stands = data.stands || [];
-    state.classes = data.classes || [];
-    state.inscriptions = data.inscriptions || [];
-    state.classRestrictions = data.classRestrictions || {};
-    state.volunteering = data.volunteering || [];
-    state.settings = data.settings || {};
-    adminPassword = data.adminPassword || null;
-    // Migration : convertir slotCaps (objet, clés invalides Firebase) en slotCapsList (tableau)
+    state.stands             = data.stands || [];
+    state.classes            = data.classes || [];
+    state.inscriptions       = objToArray(data.inscriptions);
+    state.classRestrictions  = data.classRestrictions || {};
+    state.volunteering       = objToArray(data.volunteering);
+    state.settings           = data.settings || {};
+    adminPassword            = data.adminPassword || null;
+
+    // Migration : si les inscriptions étaient stockées en tableau (ancien format),
+    // les réécrire immédiatement en format objet clé→valeur
+    if (data.inscriptions && Array.isArray(data.inscriptions) && data.inscriptions.length) {
+      console.log('Migration inscriptions tableau → objet Firebase…');
+      const updates = {};
+      data.inscriptions.forEach(ins => { updates[ins.id] = ins; });
+      await db.ref('/inscriptions').set(updates);
+    }
+    if (data.volunteering && Array.isArray(data.volunteering) && data.volunteering.length) {
+      console.log('Migration bénévolat tableau → objet Firebase…');
+      const updates = {};
+      data.volunteering.forEach(v => { updates[v.id] = v; });
+      await db.ref('/volunteering').set(updates);
+    }
+
+    // Migration slotCaps → slotCapsList
     state.stands.forEach(st => {
       if (st.slotCaps && !st.slotCapsList) {
         st.slotCapsList = st.slots.map(sl => st.slotCaps[sl] || st.cap);
@@ -718,12 +761,8 @@ async function loadData() {
     });
   } catch(err) {
     console.warn('Erreur load Firebase:', err.message);
-    state.stands = [];
-    state.classes = [];
-    state.inscriptions = [];
-    state.classRestrictions = {};
-    state.volunteering = [];
-    state.settings = {};
+    state.stands = []; state.classes = []; state.inscriptions = [];
+    state.classRestrictions = {}; state.volunteering = []; state.settings = {};
     adminPassword = null;
   }
 
@@ -736,15 +775,33 @@ async function loadData() {
   const hasRestauration = state.stands.some(s => s.id === 'restauration');
   if (!hasRestauration) {
     state.stands.push({
-      id: 'restauration',
-      name: 'Restauration',
-      emoji: '🍽️',
-      cap: 6,
-      slots: ['8h00/10h00', '12h00/13h30', '13h00/14h30'],
+      id: 'restauration', name: 'Restauration', emoji: '🍽️',
+      cap: 6, slots: ['8h00/10h00', '12h00/13h30', '13h00/14h30'],
       slotCapsList: [6, 7, 7]
     });
     await saveData();
   }
+}
+
+// ── ÉCOUTE TEMPS RÉEL ────────────────────────────────────────
+// Appelé une fois après loadData() ; maintient state.inscriptions et
+// state.volunteering synchronisés avec Firebase en permanence.
+function startRealtimeListeners() {
+  db.ref('/inscriptions').on('value', snapshot => {
+    state.inscriptions = objToArray(snapshot.val());
+    // Rafraîchir les vues affichées
+    const cur = (document.querySelector('.page.active') || {}).id || '';
+    if (cur === 'page-planning')    renderPlanning();
+    if (cur === 'page-inscription') { renderRecentInscriptions(); }
+    if (cur === 'page-nonassignes') renderNonAssignes();
+    if (cur === 'page-benevolat')   renderBenevolat();
+  });
+
+  db.ref('/volunteering').on('value', snapshot => {
+    state.volunteering = objToArray(snapshot.val());
+    const cur = (document.querySelector('.page.active') || {}).id || '';
+    if (cur === 'page-benevolat') renderBenevolat();
+  });
 }
 
 // ── EXPORT / IMPORT ──────────────────────────────────────────
@@ -768,14 +825,20 @@ function importData(event) {
   const file = event.target.files[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = e => {
+  reader.onload = async e => {
     try {
       const data = JSON.parse(e.target.result);
       if (!data.stands || !data.classes) throw new Error('Format invalide');
       if (!confirm('Importer ces données ? Toutes les données actuelles seront remplacées.')) return;
       state.stands = data.stands || state.stands;
       state.classes = data.classes || state.classes;
+      // Effacer puis réécrire inscriptions et bénévolat de façon atomique
+      await db.ref('/inscriptions').remove();
+      await db.ref('/volunteering').remove();
       state.inscriptions = data.inscriptions || [];
+      state.volunteering = data.volunteering || [];
+      for (const ins of state.inscriptions) await saveInscription(ins);
+      for (const vol of state.volunteering) await saveVolunteering(vol);
       saveData();
       refreshPage();
       toast('Import réussi ✅');
@@ -790,6 +853,10 @@ function resetAllData() {
   state.stands = [];
   state.classes = [];
   state.inscriptions = [];
+  state.volunteering = [];
+  // Effacer les nœuds atomiques dans Firebase
+  db.ref('/inscriptions').remove();
+  db.ref('/volunteering').remove();
   saveData();
   loadData().then(() => refreshPage());
   toast('Données réinitialisées');
@@ -875,6 +942,7 @@ async function init() {
   try {
     await initFirebase();
     await loadData();
+    startRealtimeListeners();
   } catch(err) {
     console.error('Erreur initialisation:', err.message);
     toast('Erreur de connexion à Firebase', 'error');
@@ -1343,7 +1411,7 @@ window.admToggleClass = (masterCb, classId) => {
     .forEach(cb => { cb.checked = masterCb.checked; });
 };
 
-window.submitAdminInscription = () => {
+window.submitAdminInscription = async () => {
   const sid = $('adm-sel-stand').value;
   if (!sid)          return toast('Choisissez un stand','error');
   if (!selectedSlot) return toast('Choisissez un créneau','error');
@@ -1356,8 +1424,8 @@ window.submitAdminInscription = () => {
   if (checkedEls.length > left)
     return toast(`Seulement ${left} place(s) disponible(s) sur ce créneau (${checkedEls.length} sélectionné(s))`, 'error');
 
-  checkedEls.forEach(cb => {
-    state.inscriptions.push({
+  for (const cb of checkedEls) {
+    const ins = {
       id: genId(),
       childName: cb.value,
       classId: cb.dataset.classid,
@@ -1365,10 +1433,11 @@ window.submitAdminInscription = () => {
       slotTime: selectedSlot,
       forced: true,
       createdAt: Date.now()
-    });
-  });
+    };
+    await saveInscription(ins);
+    state.inscriptions.push(ins);
+  }
 
-  saveData();
   toast(`✅ ${checkedEls.length} inscription(s) enregistrée(s) !`);
 
   // Garder le stand + créneau sélectionnés, juste rafraîchir la liste des enfants
@@ -1403,45 +1472,55 @@ window.submitInscription = () => {
   $('benevolat-modal').classList.add('open');
 };
 
-window.confirmBenevolat = (save) => {
+window.confirmBenevolat = async (save) => {
   $('benevolat-modal').classList.remove('open');
   if (!_pendingInscription) return;
   const { cid, sid, childName, parentName, slot } = _pendingInscription;
   _pendingInscription = null;
 
-  // Enregistrer l'inscription
-  state.inscriptions.push({
+  // Enregistrement atomique de l'inscription (un seul nœud Firebase)
+  const ins = {
     id: genId(),
-    childName, classId:cid, standId:sid, slotTime:slot,
+    childName, classId: cid, standId: sid, slotTime: slot,
     parentName: parentName || undefined,
-    createdAt:Date.now()
-  });
+    createdAt: Date.now()
+  };
+  try {
+    await saveInscription(ins);
+    // Mettre à jour le state local (le listener temps réel le fera aussi,
+    // mais on l'ajoute tout de suite pour une UI réactive)
+    state.inscriptions.push(ins);
+  } catch(err) {
+    toast('❌ Erreur lors de l\'enregistrement', 'error');
+    console.error(err);
+    return;
+  }
 
-  // Enregistrer le bénévolat
+  // Enregistrement atomique du bénévolat
   const installation = save && $('benv-installation').checked;
   const rangement    = save && $('benv-rangement').checked;
   if (installation || rangement) {
-    state.volunteering.push({
-      id: genId(),
-      childName, classId: cid,
-      installation, rangement,
-      createdAt: Date.now()
-    });
+    const vol = { id: genId(), childName, classId: cid, installation, rangement, createdAt: Date.now() };
+    try {
+      await saveVolunteering(vol);
+      state.volunteering.push(vol);
+    } catch(err) {
+      console.warn('Erreur bénévolat:', err.message);
+    }
   }
 
-  saveData();
   toast('✅ Inscription enregistrée !');
-  $('sel-classe').value='';
-  $('sel-enfant').value='';
-  $('restriction-banner').style.display='none';
-  ['step-enfant','step-parent','step-stand','step-creneau','step-submit'].forEach(id=>$(id).style.display='none');
+  $('sel-classe').value = '';
+  $('sel-enfant').value = '';
+  $('restriction-banner').style.display = 'none';
+  ['step-enfant','step-parent','step-stand','step-creneau','step-submit'].forEach(id => $(id).style.display = 'none');
   selectedSlot = null;
   renderRecentInscriptions();
   renderInscriptionSelects();
 
   // Proposer l'achat de jetons si un lien est configuré, puis repas, puis planning
-  const jetonsUrl  = (state.settings.helloassoJetonsUrl || '').trim();
-  const helloasso  = (state.settings.helloassoUrl || '').trim();
+  const jetonsUrl = (state.settings.helloassoJetonsUrl || '').trim();
+  const helloasso = (state.settings.helloassoUrl || '').trim();
   if (jetonsUrl) {
     $('jetons-modal').classList.add('open');
   } else if (helloasso) {
@@ -1498,10 +1577,10 @@ function renderRecentInscriptions() {
   renderCancelSelect();
 }
 
-window.deleteInscription = (id) => {
+window.deleteInscription = async (id) => {
   if (!confirm('Supprimer cette inscription ?')) return;
+  await deleteInscriptionRemote(id);
   state.inscriptions = state.inscriptions.filter(i=>i.id!==id);
-  saveData();
   renderRecentInscriptions();
   renderInscriptionSelects();
   toast('Inscription supprimée');
@@ -1591,10 +1670,13 @@ window.addChild = async classId => {
   }
 };
 
-window.removeChildFromClass = (classId, childName) => {
+window.removeChildFromClass = async (classId, childName) => {
   if (!confirm(`Supprimer ${childName} ?`)) return;
   const cls = getClass(classId);
   cls.children = (cls.children||[]).filter(c=>c!==childName);
+  // Supprimer les inscriptions de cet enfant dans Firebase
+  const toDelete = state.inscriptions.filter(i=>i.classId===classId&&i.childName===childName);
+  for (const ins of toDelete) await deleteInscriptionRemote(ins.id);
   state.inscriptions = state.inscriptions.filter(i=>!(i.classId===classId&&i.childName===childName));
   saveData();
   renderClasses();
@@ -1612,10 +1694,12 @@ window.addClassFn = () => {
   toast('Classe ajoutée ✅');
 };
 
-window.removeClassFn = classId => {
+window.removeClassFn = async classId => {
   const cls = getClass(classId);
   if (!confirm(`Supprimer la classe "${cls?.name}" et toutes ses données ?`)) return;
   state.classes = state.classes.filter(c=>c.id!==classId);
+  const toDelete = state.inscriptions.filter(i=>i.classId===classId);
+  for (const ins of toDelete) await deleteInscriptionRemote(ins.id);
   state.inscriptions = state.inscriptions.filter(i=>i.classId!==classId);
   saveData();
   renderClasses();
@@ -1813,13 +1897,15 @@ window.addSlot = standId => {
   renderParametres();
 };
 
-window.removeSlot = (standId, slotIdx) => {
+window.removeSlot = async (standId, slotIdx) => {
   const st = state.stands.find(s=>s.id===standId);
   if (!st) return;
   if (st.slots.length <= 1) return toast('Un stand doit avoir au moins 1 créneau','error');
   if (!confirm('Supprimer ce créneau ?')) return;
-  // Remove inscriptions for this slot
-  state.inscriptions = state.inscriptions.filter(i=>!(i.standId===standId && i.slotTime===st.slots[slotIdx]));
+  const slotTime = st.slots[slotIdx];
+  const toDelete = state.inscriptions.filter(i=>i.standId===standId && i.slotTime===slotTime);
+  for (const ins of toDelete) await deleteInscriptionRemote(ins.id);
+  state.inscriptions = state.inscriptions.filter(i=>!(i.standId===standId && i.slotTime===slotTime));
   st.slots.splice(slotIdx, 1);
   saveData();
   renderParametres();
@@ -1843,10 +1929,12 @@ window.addStand = () => {
   toast(`Stand "${name}" ajouté ✅`);
 };
 
-window.removeStand = standId => {
+window.removeStand = async standId => {
   const st = state.stands.find(s=>s.id===standId);
   if (!confirm(`Supprimer le stand "${st?.name}" et toutes ses inscriptions ?`)) return;
   state.stands = state.stands.filter(s=>s.id!==standId);
+  const toDelete = state.inscriptions.filter(i=>i.standId===standId);
+  for (const ins of toDelete) await deleteInscriptionRemote(ins.id);
   state.inscriptions = state.inscriptions.filter(i=>i.standId!==standId);
   saveData();
   renderParametres();
@@ -1882,10 +1970,10 @@ function renderBenevolat() {
   }).join('');
 }
 
-window.deleteVolunteering = (id) => {
+window.deleteVolunteering = async (id) => {
   if (!confirm('Supprimer cette entrée bénévole ?')) return;
+  await deleteVolunteeringRemote(id);
   state.volunteering = (state.volunteering||[]).filter(v=>v.id!==id);
-  saveData();
   renderBenevolat();
   toast('Entrée supprimée');
 };
