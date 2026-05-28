@@ -1216,7 +1216,7 @@ window.onClasseChange = () => {
   const cls = getClass(cid);
   const selEnfant = $('sel-enfant');
   selEnfant.innerHTML = '<option value="">— Choisir un enfant —</option>';
-  (cls.children||[]).forEach(ch => selEnfant.innerHTML += `<option value="${ch}">${ch}</option>`);
+  [...(cls.children||[])].sort((a,b) => a.localeCompare(b, 'fr')).forEach(ch => selEnfant.innerHTML += `<option value="${ch}">${ch}</option>`);
   selEnfant.value = '';
   $('step-enfant').style.display='flex';
   $('step-parent').style.display='none';
@@ -1435,7 +1435,6 @@ window.submitAdminInscription = async () => {
       createdAt: Date.now()
     };
     await saveInscription(ins);
-    state.inscriptions.push(ins);
   }
 
   toast(`✅ ${checkedEls.length} inscription(s) enregistrée(s) !`);
@@ -1487,9 +1486,6 @@ window.confirmBenevolat = async (save) => {
   };
   try {
     await saveInscription(ins);
-    // Mettre à jour le state local (le listener temps réel le fera aussi,
-    // mais on l'ajoute tout de suite pour une UI réactive)
-    state.inscriptions.push(ins);
   } catch(err) {
     toast('❌ Erreur lors de l\'enregistrement', 'error');
     console.error(err);
@@ -1503,7 +1499,6 @@ window.confirmBenevolat = async (save) => {
     const vol = { id: genId(), childName, classId: cid, installation, rangement, createdAt: Date.now() };
     try {
       await saveVolunteering(vol);
-      state.volunteering.push(vol);
     } catch(err) {
       console.warn('Erreur bénévolat:', err.message);
     }
