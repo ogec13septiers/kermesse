@@ -1018,7 +1018,8 @@ function renderPlanning() {
             <div class="slot-count">${used}/${cap} ${badge}</div>
             ${names.length?`<div class="slot-names">${names.map(n => {
               const label = `${n.childName} - ${n.className}${n.parentName ? ' ('+n.parentName+')' : ''}`;
-              return `• ${n.forced ? `<em>${label}</em>` : label}`;
+              const forcedBadge = (n.forced && isAdmin) ? ` <span style="font-size:0.65rem;background:#fde68a;color:#78350f;border-radius:4px;padding:0 4px;font-weight:700;vertical-align:middle">ADM</span>` : '';
+              return `• ${n.forced ? `<em>${label}</em>${forcedBadge}` : label}`;
             }).join('<br>')}</div>`:''}
           </div>`;
         }).join('')}
@@ -1061,7 +1062,8 @@ function exportPlanning() {
         const ins = c.inscriptions[r];
         if (!ins) return '';
         const cls = getClass(ins.classId);
-        return `${ins.childName}${cls ? ' (' + cls.name + ')' : ''}`;
+        const forced = ins.forced ? ' (*)' : '';
+        return `${ins.childName}${cls ? ' (' + cls.name + ')' : ''}${forced}`;
       }));
     }
 
@@ -1082,36 +1084,62 @@ function exportPlanning() {
     XLSX.utils.book_append_sheet(wb, ws, sheetName);
   });
 
-  // ── 2. Feuille récapitulatif tous les stands ──────────────
+  // ── 2. Feuille récapitulatif — appel par créneau ─────────
   {
-    const rows = [];
-    rows.push(['Kermesse Saint-Martin — 21 juin 2026 — Récapitulatif des stands']);
-    rows.push([]);
-    rows.push(['Stand', 'Créneau', 'Places totales', 'Inscrits', 'Places libres', 'Noms des inscrits']);
+    // Collecter tous les créneaux distincts, triés
+    const allSlots = [];
+    state.stands.forEach(st => st.slots.forEach(sl => {
+      if (!allSlots.includes(sl)) allSlots.push(sl);
+    }));
+    // Tri lexicographique (les créneaux sont généralement au format hh:mm/hh:mm)
+    allSlots.sort((a, b) => a.localeCompare(b, 'fr'));
 
-    state.stands.forEach(st => {
-      st.slots.forEach(sl => {
-        const cap  = slotCap(st, sl);
-        const ins  = state.inscriptions.filter(i => i.standId === st.id && i.slotTime === sl);
-        const names = ins.map(i => {
+    const rows = [];
+    rows.push(['Kermesse Saint-Martin — 21 juin 2026 — Appel par créneau']);
+    rows.push([]);
+
+    allSlots.forEach(sl => {
+      // En-tête du créneau
+      rows.push([`⏰ Créneau : ${sl}`]);
+      rows.push(['Stand', 'Classe', 'Enfant', 'Parent / Contact']);
+
+      // Toutes les inscriptions pour ce créneau, triées par stand puis classe puis enfant
+      const insForSlot = state.inscriptions
+        .filter(i => i.slotTime === sl)
+        .sort((a, b) => {
+          const stA = state.stands.find(s => s.id === a.standId)?.name || '';
+          const stB = state.stands.find(s => s.id === b.standId)?.name || '';
+          if (stA !== stB) return stA.localeCompare(stB, 'fr');
+          const clsA = getClass(a.classId)?.name || '';
+          const clsB = getClass(b.classId)?.name || '';
+          if (clsA !== clsB) return clsA.localeCompare(clsB, 'fr');
+          return a.childName.localeCompare(b.childName, 'fr');
+        });
+
+      if (!insForSlot.length) {
+        rows.push(['—', '—', '—', '—']);
+      } else {
+        insForSlot.forEach(i => {
+          const st  = state.stands.find(s => s.id === i.standId);
           const cls = getClass(i.classId);
-          return `${i.childName}${cls ? ' (' + cls.name + ')' : ''}`;
-        }).join(', ');
-        rows.push([
-          `${st.emoji} ${st.name}`,
-          sl,
-          cap,
-          ins.length,
-          cap - ins.length,
-          names
-        ]);
-      });
+          const contact = i.forced
+            ? `${i.childName} (*)` // forcé par admin, pas de parent connu
+            : (i.parentName || i.childName);
+          rows.push([
+            `${st?.emoji || ''} ${st?.name || '—'}`,
+            cls?.name || '—',
+            i.childName,
+            contact
+          ]);
+        });
+      }
+
+      rows.push([]); // séparateur entre créneaux
     });
 
     const ws = XLSX.utils.aoa_to_sheet(rows);
-    ws['!cols'] = [{ wch:24 }, { wch:18 }, { wch:14 }, { wch:10 }, { wch:13 }, { wch:60 }];
-    ws['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:5} }];
-    XLSX.utils.book_append_sheet(wb, ws, 'Récapitulatif');
+    ws['!cols'] = [{ wch:26 }, { wch:10 }, { wch:26 }, { wch:28 }];
+    XLSX.utils.book_append_sheet(wb, ws, 'Appel par créneau');
   }
 
   // ── 3. Feuille bénévoles mise en place / rangement ────────
