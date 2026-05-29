@@ -1062,8 +1062,10 @@ function exportPlanning() {
         const ins = c.inscriptions[r];
         if (!ins) return '';
         const cls = getClass(ins.classId);
-        const forced = ins.forced ? ' (*)' : '';
-        return `${ins.childName}${cls ? ' (' + cls.name + ')' : ''}${forced}`;
+        const contact = ins.forced
+          ? `${ins.childName}${cls ? ' (' + cls.name + ')' : ''} (*)`
+          : `${ins.childName}${cls ? ' (' + cls.name + ')' : ''}${ins.parentName ? ' — ' + ins.parentName : ''}`;
+        return contact;
       }));
     }
 
