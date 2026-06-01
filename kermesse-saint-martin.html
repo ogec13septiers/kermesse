@@ -335,6 +335,13 @@
         <span>Dimanche soir, après la kermesse — démontage et nettoyage</span>
       </div>
     </label>
+    <label class="benevolat-option">
+      <input type="checkbox" id="benv-rangement-lundi" />
+      <div class="benevolat-option-label">
+        <strong>🌅 Rangement lundi matin</strong>
+        <span>Lundi matin — finalisation du rangement et nettoyage</span>
+      </div>
+    </label>
     <div class="benevolat-modal-actions">
       <button class="btn btn-secondary" onclick="confirmBenevolat(false)">Passer</button>
       <button class="btn btn-primary" onclick="confirmBenevolat(true)">✅ Confirmer</button>
@@ -401,7 +408,7 @@
       <button class="nav-btn admin-only" onclick="showPage('parametres')"  id="nav-parametres">🏕️ Gestion des stands</button>
       <button class="nav-btn admin-only" onclick="showPage('classes')"     id="nav-classes">👨‍👩‍👧 Gestion des classes</button>
       <button class="nav-btn admin-only" onclick="showPage('nonassignes')" id="nav-nonassignes">⚠️ Non positionnés</button>
-      <button class="nav-btn admin-only" onclick="showPage('benevolat')"   id="nav-benevolat">🔧 Mise en place/rangement</button>
+      <button class="nav-btn"        onclick="showPage('benevolat')"   id="nav-benevolat">🔧 Mise en place/rangement</button>
       <button class="nav-btn admin-only" onclick="showPage('reglages')"    id="nav-reglages">⚙️ Paramètres</button>
     </div>
   </nav>
@@ -551,22 +558,68 @@
   </div>
 </div>
 
-<!-- BÉNÉVOLAT (admin) -->
+<!-- BÉNÉVOLAT -->
 <div class="page" id="page-benevolat">
   <div class="page-header"><span style="font-size:1.8rem">🔧</span><h2>Mise en place &amp; rangement</h2></div>
-  <div class="admin-banner">🔑 Mode administrateur — Liste des bénévoles</div>
   <div id="benevolat-stats-row" class="stats-row"></div>
-  <div class="card" style="margin-top:1rem">
+
+  <!-- Formulaire inscription rapide (mode non-admin) -->
+  <div class="card" id="benevolat-form-card" style="margin-bottom:1.5rem">
+    <div class="card-title">✋ Je donne un coup de main</div>
+    <p style="font-size:0.88rem;color:var(--text-light);margin-bottom:1rem">Ces bénévoles sont indispensables pour que la kermesse se déroule dans les meilleures conditions. Merci !</p>
+    <div style="display:grid;gap:1rem">
+      <div class="form-group">
+        <label>👤 Votre nom (parent)</label>
+        <input type="text" id="benv-form-parent" placeholder="Prénom NOM" style="max-width:320px" />
+      </div>
+      <div class="form-group">
+        <label>👧 Enfant concerné</label>
+        <div style="display:flex;gap:0.8rem;flex-wrap:wrap">
+          <select id="benv-form-classe" onchange="onBenvClasseChange()" style="flex:1;min-width:160px">
+            <option value="">— Classe —</option>
+          </select>
+          <select id="benv-form-enfant" style="flex:2;min-width:180px">
+            <option value="">— Enfant —</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>🗓️ Disponibilités</label>
+        <div style="display:flex;flex-direction:column;gap:0.5rem">
+          <label style="display:flex;align-items:center;gap:0.6rem;font-weight:400;cursor:pointer">
+            <input type="checkbox" id="benv-form-installation" style="accent-color:var(--primary);width:17px;height:17px" />
+            <span><strong>🔨 Installation</strong> — Samedi matin, avant la kermesse</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:0.6rem;font-weight:400;cursor:pointer">
+            <input type="checkbox" id="benv-form-rangement" style="accent-color:var(--primary);width:17px;height:17px" />
+            <span><strong>📦 Rangement dimanche</strong> — Dimanche soir, après la kermesse</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:0.6rem;font-weight:400;cursor:pointer">
+            <input type="checkbox" id="benv-form-rangement-lundi" style="accent-color:var(--primary);width:17px;height:17px" />
+            <span><strong>🌅 Rangement lundi</strong> — Lundi matin, finalisation</span>
+          </label>
+        </div>
+      </div>
+      <div>
+        <button class="btn btn-primary" onclick="submitBenevolatDirect()">✅ M'inscrire comme bénévole</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tableau des bénévoles -->
+  <div class="card" id="benevolat-list-card">
     <div class="card-title">🤝 Bénévoles enregistrés</div>
     <div style="overflow-x:auto">
       <table class="benevolat-table" id="benevolat-table">
         <thead>
           <tr>
+            <th>Parent</th>
             <th>Enfant</th>
             <th>Classe</th>
-            <th style="text-align:center">🔨 Installation (sam. matin)</th>
-            <th style="text-align:center">📦 Rangement (dim. soir)</th>
-            <th style="text-align:center">Actions</th>
+            <th style="text-align:center">🔨 Installation</th>
+            <th style="text-align:center">📦 Rangement dim.</th>
+            <th style="text-align:center">🌅 Rangement lun.</th>
+            <th style="text-align:center" id="benevolat-actions-th" class="admin-only">Actions</th>
           </tr>
         </thead>
         <tbody id="benevolat-tbody"></tbody>
@@ -921,7 +974,7 @@ function applyAdminUI() {
     $('btn-export-pdf').style.display = 'none';
     $('btn-inscrire-planning').style.display = 'inline-flex';
     // Redirect to planning if on admin-only page
-    if (activePage && ['page-classes','page-nonassignes','page-parametres','page-benevolat','page-reglages'].includes(activePage.id)) {
+    if (activePage && ['page-classes','page-nonassignes','page-parametres','page-reglages'].includes(activePage.id)) {
       showPage('planning');
     }
   }
@@ -967,7 +1020,7 @@ function refreshPage() {
 // ── NAVIGATION ───────────────────────────────────────────────
 window.showPage = id => {
   // Vérif admin
-  const adminPages = ['classes','nonassignes','parametres','benevolat','reglages'];
+  const adminPages = ['classes','nonassignes','parametres','reglages'];
   if (adminPages.includes(id) && !isAdmin) {
     openAdminModal();
     return;
@@ -1149,25 +1202,27 @@ function exportPlanning() {
     const rows = [];
     rows.push(['Kermesse Saint-Martin — 21 juin 2026 — Bénévoles mise en place & rangement']);
     rows.push([]);
-    rows.push(['Enfant', 'Classe', 'Installation (sam. matin)', 'Rangement (dim. soir)']);
+    rows.push(['Parent', 'Enfant', 'Classe', 'Installation (sam. matin)', 'Rangement (dim. soir)', 'Rangement (lun. matin)']);
 
     const vol = state.volunteering || [];
-    const sorted = [...vol].sort((a,b) => (a.childName||'').localeCompare(b.childName||''));
+    const sorted = [...vol].sort((a,b) => (a.childName||'').localeCompare(b.childName||'', 'fr'));
     sorted.forEach(v => {
       const cls = getClass(v.classId);
       rows.push([
+        v.parentName || '—',
         v.childName,
         cls?.name || '—',
-        v.installation ? 'Oui' : 'Non',
-        v.rangement    ? 'Oui' : 'Non'
+        v.installation    ? 'Oui' : 'Non',
+        v.rangement       ? 'Oui' : 'Non',
+        v.rangementLundi  ? 'Oui' : 'Non'
       ]);
     });
 
-    if (!sorted.length) rows.push(['Aucun bénévole enregistré', '', '', '']);
+    if (!sorted.length) rows.push(['Aucun bénévole enregistré', '', '', '', '', '']);
 
     const ws = XLSX.utils.aoa_to_sheet(rows);
-    ws['!cols'] = [{ wch:28 }, { wch:14 }, { wch:26 }, { wch:24 }];
-    ws['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:3} }];
+    ws['!cols'] = [{ wch:26 }, { wch:26 }, { wch:12 }, { wch:24 }, { wch:22 }, { wch:22 }];
+    ws['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:5} }];
     XLSX.utils.book_append_sheet(wb, ws, 'Bénévoles');
   }
 
@@ -1523,10 +1578,11 @@ window.confirmBenevolat = async (save) => {
   }
 
   // Enregistrement atomique du bénévolat
-  const installation = save && $('benv-installation').checked;
-  const rangement    = save && $('benv-rangement').checked;
-  if (installation || rangement) {
-    const vol = { id: genId(), childName, classId: cid, installation, rangement, createdAt: Date.now() };
+  const installation   = save && $('benv-installation').checked;
+  const rangement      = save && $('benv-rangement').checked;
+  const rangementLundi = save && $('benv-rangement-lundi').checked;
+  if (installation || rangement || rangementLundi) {
+    const vol = { id: genId(), parentName: parentName || undefined, childName, classId: cid, installation, rangement, rangementLundi, createdAt: Date.now() };
     try {
       await saveVolunteering(vol);
     } catch(err) {
@@ -1969,31 +2025,98 @@ window.removeStand = async standId => {
 // ── BÉNÉVOLAT ────────────────────────────────────────────────
 function renderBenevolat() {
   const vol = state.volunteering || [];
-  const nbInstall  = vol.filter(v=>v.installation).length;
-  const nbRangement = vol.filter(v=>v.rangement).length;
+  const nbInstall       = vol.filter(v=>v.installation).length;
+  const nbRangement     = vol.filter(v=>v.rangement).length;
+  const nbRangLundi     = vol.filter(v=>v.rangementLundi).length;
 
   $('benevolat-stats-row').innerHTML = `
     <div class="stat-card"><span class="stat-icon">🤝</span><div><div class="stat-num">${vol.length}</div><div class="stat-label">Bénévoles enregistrés</div></div></div>
-    <div class="stat-card"><span class="stat-icon">🔨</span><div><div class="stat-num">${nbInstall}</div><div class="stat-label">Installation (sam. matin)</div></div></div>
-    <div class="stat-card"><span class="stat-icon">📦</span><div><div class="stat-num">${nbRangement}</div><div class="stat-label">Rangement (dim. soir)</div></div></div>`;
+    <div class="stat-card"><span class="stat-icon">🔨</span><div><div class="stat-num">${nbInstall}</div><div class="stat-label">Installation (sam.)</div></div></div>
+    <div class="stat-card"><span class="stat-icon">📦</span><div><div class="stat-num">${nbRangement}</div><div class="stat-label">Rangement (dim.)</div></div></div>
+    <div class="stat-card"><span class="stat-icon">🌅</span><div><div class="stat-num">${nbRangLundi}</div><div class="stat-label">Rangement (lun.)</div></div></div>`;
+
+  // Afficher/masquer la colonne Actions selon le mode
+  const actTh = $('benevolat-actions-th');
+  if (actTh) actTh.style.display = isAdmin ? '' : 'none';
+
+  // Peupler les selects du formulaire d'inscription rapide
+  const selClasse = $('benv-form-classe');
+  if (selClasse) {
+    const prev = selClasse.value;
+    selClasse.innerHTML = '<option value="">— Classe —</option>';
+    state.classes.filter(c=>(c.children||[]).length>0).forEach(c =>
+      selClasse.innerHTML += `<option value="${c.id}" ${c.id===prev?'selected':''}>${c.name}</option>`
+    );
+    if (prev) onBenvClasseChange();
+  }
 
   const tbody = $('benevolat-tbody');
   if (!vol.length) {
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-light);padding:2rem">Aucun bénévole enregistré pour l'instant.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text-light);padding:2rem">Aucun bénévole enregistré pour l'instant.</td></tr>`;
     return;
   }
-  const sorted = [...vol].sort((a,b)=>(a.childName||'').localeCompare(b.childName||''));
+  const sorted = [...vol].sort((a,b)=>(a.childName||'').localeCompare(b.childName||'', 'fr'));
   tbody.innerHTML = sorted.map(v => {
     const cls = getClass(v.classId);
+    const deleteCell = isAdmin
+      ? `<td style="text-align:center"><button class="btn btn-danger btn-sm" onclick="deleteVolunteering('${v.id}')">🗑</button></td>`
+      : `<td style="display:none"></td>`;
     return `<tr>
-      <td style="font-weight:700">${v.childName}</td>
+      <td style="font-weight:700">${v.parentName||'—'}</td>
+      <td>${v.childName||'—'}</td>
       <td>${cls?.name||'—'}</td>
-      <td style="text-align:center">${v.installation ? '<span class="check-yes">✔ Oui</span>' : '<span class="check-no">—</span>'}</td>
-      <td style="text-align:center">${v.rangement    ? '<span class="check-yes">✔ Oui</span>' : '<span class="check-no">—</span>'}</td>
-      <td style="text-align:center"><button class="btn btn-danger btn-sm" onclick="deleteVolunteering('${v.id}')">🗑</button></td>
+      <td style="text-align:center">${v.installation    ? '<span class="check-yes">✔</span>' : '<span class="check-no">—</span>'}</td>
+      <td style="text-align:center">${v.rangement       ? '<span class="check-yes">✔</span>' : '<span class="check-no">—</span>'}</td>
+      <td style="text-align:center">${v.rangementLundi  ? '<span class="check-yes">✔</span>' : '<span class="check-no">—</span>'}</td>
+      ${deleteCell}
     </tr>`;
   }).join('');
 }
+
+window.onBenvClasseChange = () => {
+  const cid = $('benv-form-classe').value;
+  const sel = $('benv-form-enfant');
+  sel.innerHTML = '<option value="">— Enfant —</option>';
+  if (!cid) return;
+  const cls = getClass(cid);
+  [...(cls.children||[])].sort((a,b)=>a.localeCompare(b,'fr'))
+    .forEach(ch => sel.innerHTML += `<option value="${ch}">${ch}</option>`);
+};
+
+window.submitBenevolatDirect = async () => {
+  const parentName     = ($('benv-form-parent').value || '').trim();
+  const classId        = $('benv-form-classe').value;
+  const childName      = $('benv-form-enfant').value;
+  const installation   = $('benv-form-installation').checked;
+  const rangement      = $('benv-form-rangement').checked;
+  const rangementLundi = $('benv-form-rangement-lundi').checked;
+
+  if (!childName) return toast('Choisissez un enfant', 'error');
+  if (!installation && !rangement && !rangementLundi)
+    return toast('Cochez au moins une disponibilité', 'error');
+
+  const vol = {
+    id: genId(),
+    parentName: parentName || undefined,
+    childName, classId,
+    installation, rangement, rangementLundi,
+    createdAt: Date.now()
+  };
+  try {
+    await saveVolunteering(vol);
+    toast('✅ Inscription bénévole enregistrée, merci !');
+    // Réinitialiser le formulaire
+    $('benv-form-parent').value = '';
+    $('benv-form-classe').value = '';
+    $('benv-form-enfant').innerHTML = '<option value="">— Enfant —</option>';
+    $('benv-form-installation').checked   = false;
+    $('benv-form-rangement').checked      = false;
+    $('benv-form-rangement-lundi').checked = false;
+  } catch(err) {
+    toast('❌ Erreur lors de l\'enregistrement', 'error');
+    console.error(err);
+  }
+};
 
 window.deleteVolunteering = async (id) => {
   if (!confirm('Supprimer cette entrée bénévole ?')) return;
