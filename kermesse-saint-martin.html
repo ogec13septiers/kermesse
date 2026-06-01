@@ -2091,7 +2091,6 @@ window.submitBenevolatDirect = async () => {
   const rangement      = $('benv-form-rangement').checked;
   const rangementLundi = $('benv-form-rangement-lundi').checked;
 
-  if (!childName) return toast('Choisissez un enfant', 'error');
   if (!installation && !rangement && !rangementLundi)
     return toast('Cochez au moins une disponibilité', 'error');
 
