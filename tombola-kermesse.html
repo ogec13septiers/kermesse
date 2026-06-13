@@ -273,6 +273,7 @@
   <button class="active" onclick="showPage('saisie')">Saisie vente</button>
   <button onclick="showPage('historique')">Historique</button>
   <button onclick="showPage('stats')">Statistiques</button>
+  <button onclick="showPage('relance')">Non répondants</button>
   <button onclick="showPage('import')">Import élèves</button>
 </nav>
 
@@ -417,6 +418,39 @@
   </div>
 </div>
 
+<div id="page-relance" class="page">
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
+      <h2 style="margin:0;">Élèves n'ayant pas encore répondu</h2>
+      <div class="btn-group">
+        <button class="btn btn-outline" onclick="chargerRelance()">↺ Actualiser</button>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:10px; align-items:center; margin-bottom:14px; flex-wrap:wrap;">
+      <div class="form-group" style="flex:1; min-width:180px; margin:0;">
+        <input type="text" id="relance-filtre" placeholder="Filtrer par nom, prénom ou classe…" oninput="filtrerRelance()" style="padding:9px 12px; border:1.5px solid #cbd5e1; border-radius:8px; font-size:0.95rem; width:100%;" />
+      </div>
+      <div id="relance-compteur" style="white-space:nowrap; font-size:0.88rem; color:#64748b;"></div>
+    </div>
+
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>Nom</th>
+            <th>Prénom</th>
+            <th>Classe</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-relance">
+          <tr><td colspan="3" style="text-align:center;color:#94a3b8;padding:30px;">Chargement...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 <div id="page-import" class="page">
   <div class="card">
     <h2>Importer la liste des élèves</h2>
@@ -496,6 +530,7 @@
     event.target.classList.add('active');
     if (page === 'historique') chargerHistorique();
     if (page === 'stats') chargerStats();
+    if (page === 'relance') chargerRelance();
     if (page === 'import') chargerNbEleves();
   };
 
@@ -791,6 +826,71 @@
     } catch (err) {
       showToast('Erreur suppression : ' + err.message);
     }
+  };
+
+  // ===================== NON RÉPONDANTS =====================
+
+  let relanceCache = [];
+
+  window.chargerRelance = async function() {
+    const tbody = document.getElementById('tbody-relance');
+    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#94a3b8;padding:20px;">Chargement...</td></tr>';
+    document.getElementById('relance-filtre').value = '';
+    document.getElementById('relance-compteur').textContent = '';
+    try {
+      const snap = await getDocs(collection(db, 'eleves'));
+      relanceCache = snap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(e => !e.repondu)
+        .sort((a, b) => (a.classe + a.nom + a.prenom).localeCompare(b.classe + b.nom + b.prenom));
+      filtrerRelance();
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="3" style="color:#dc2626;padding:20px;">${err.message}</td></tr>`;
+    }
+  };
+
+  window.filtrerRelance = function() {
+    const tbody = document.getElementById('tbody-relance');
+    const q = document.getElementById('relance-filtre').value.trim().toLowerCase();
+    const liste = q
+      ? relanceCache.filter(e =>
+          e.nom.toLowerCase().includes(q) ||
+          e.prenom.toLowerCase().includes(q) ||
+          (e.classe || '').toLowerCase().includes(q))
+      : relanceCache;
+
+    document.getElementById('relance-compteur').textContent =
+      `${liste.length} élève(s) sur ${relanceCache.length} non répondant(s)`;
+
+    if (!liste.length) {
+      tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;color:#94a3b8;padding:30px;">${relanceCache.length === 0 ? '🎉 Tous les élèves ont répondu !' : 'Aucun résultat pour ce filtre.'}</td></tr>`;
+      return;
+    }
+
+    // Grouper par classe
+    const parClasse = {};
+    liste.forEach(e => {
+      const cl = e.classe || 'Sans classe';
+      if (!parClasse[cl]) parClasse[cl] = [];
+      parClasse[cl].push(e);
+    });
+
+    tbody.innerHTML = Object.entries(parClasse)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([classe, eleves]) => `
+        <tr style="background:#f1f5f9;">
+          <td colspan="3" style="font-weight:700; color:#475569; font-size:0.82rem; text-transform:uppercase; letter-spacing:0.05em; padding:8px 12px;">
+            ${classe} — ${eleves.length} élève(s)
+          </td>
+        </tr>
+        ${eleves.map(e => `
+          <tr>
+            <td>${e.nom}</td>
+            <td>${e.prenom}</td>
+            <td style="color:#64748b;">${e.classe || '—'}</td>
+          </tr>
+        `).join('')}
+      `).join('');
   };
 
   // ===================== STATS =====================
